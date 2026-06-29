@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react"
 import { usePortfolioStore } from "@/lib/store"
 import { Button } from "@/components/ui/button"
+import { AuthScreen } from "@/components/auth-screen"
 import {
   Newspaper,
   Globe,
@@ -10,6 +11,7 @@ import {
   ArrowClockwise,
   ArrowSquareOut,
   CalendarBlank,
+  SignOut,
 } from "@phosphor-icons/react"
 
 interface NewsArticle {
@@ -20,6 +22,7 @@ interface NewsArticle {
   source: string
   url: string
   image: string
+  ticker?: string
 }
 
 export default function NewsPage() {
@@ -30,14 +33,22 @@ export default function NewsPage() {
   const [selectedTicker, setSelectedTicker] = useState<string>("ALL")
   const [loadingNews, setLoadingNews] = useState(false)
 
-  const { shares } = usePortfolioStore()
+  const {
+    shares,
+    isAuthLoading,
+    user,
+    checkUserSession,
+    signOut,
+  } = usePortfolioStore()
 
   useEffect(() => {
     setMounted(true)
-  }, [])
+    checkUserSession()
+  }, [checkUserSession])
 
   // Fetch News from Backend
   const fetchNews = async () => {
+    if (!user) return
     setLoadingNews(true)
     try {
       // 1. Fetch general market news
@@ -105,11 +116,12 @@ export default function NewsPage() {
     }
   }
 
+  // Trigger news fetch after session check and mounting
   useEffect(() => {
-    if (mounted) {
+    if (mounted && user) {
       fetchNews()
     }
-  }, [mounted, shares])
+  }, [mounted, user, shares])
 
   // Relative Time Formatter
   const formatRelativeTime = (timestamp: number) => {
@@ -132,6 +144,18 @@ export default function NewsPage() {
     return article.ticker === selectedTicker
   })
 
+  // Session loader spinner during page checks
+  if (isAuthLoading && mounted) {
+    return (
+      <div className="flex flex-col flex-1 items-center justify-center bg-background text-foreground min-h-screen">
+        <div className="flex flex-col items-center gap-2.5 animate-pulse select-none">
+          <span className="text-emerald-500 font-bold font-sans text-xl animate-spin">%</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">Syncing Session...</span>
+        </div>
+      </div>
+    )
+  }
+
   // Loading skeleton during SSR to avoid hydration flicker
   if (!mounted) {
     return (
@@ -145,6 +169,15 @@ export default function NewsPage() {
             <div className="h-64 bg-muted rounded-xl" />
           </div>
         </div>
+      </div>
+    )
+  }
+
+  // Authentication guard redirect
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <AuthScreen />
       </div>
     )
   }
@@ -165,7 +198,23 @@ export default function NewsPage() {
               Curated market news intelligence and watchlist reports
             </p>
           </div>
-          <div>
+          <div className="flex items-center gap-3">
+            {/* User Profile Info */}
+            <div className="flex flex-col items-end select-none text-right leading-tight max-w-[100px] sm:max-w-[180px]">
+              <span className="text-[9px] font-mono text-muted-foreground truncate w-full">
+                {user.email}
+              </span>
+              <button
+                onClick={signOut}
+                className="text-[9px] font-bold text-muted-foreground/80 hover:text-destructive transition-colors uppercase tracking-wider cursor-pointer mt-0.5 flex items-center gap-0.5"
+              >
+                <SignOut className="w-3 h-3" /> Sign Out
+              </button>
+            </div>
+
+            {/* Separator */}
+            <div className="h-6 w-px bg-border/40 shrink-0" />
+
             <Button
               variant="outline"
               size="sm"

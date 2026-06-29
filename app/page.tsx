@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react"
 import { usePortfolioStore, Share } from "@/lib/store"
 import { PortfolioCharts } from "@/components/portfolio-charts"
+import { TickerChart } from "@/components/ticker-chart"
+import { AuthScreen } from "@/components/auth-screen"
 import { AddShareDialog } from "@/components/add-share-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +20,7 @@ import {
   Percent,
   TrendUp,
   BellSimple,
+  SignOut,
 } from "@phosphor-icons/react"
 
 export default function Home() {
@@ -31,16 +34,21 @@ export default function Home() {
     currency,
     triggeredAlerts,
     isLoading,
+    isAuthLoading,
+    user,
     error,
     refreshSharePrices,
     deleteShare,
     setCurrency,
     dismissAlert,
+    checkUserSession,
+    signOut,
   } = usePortfolioStore()
 
   useEffect(() => {
     setMounted(true)
-  }, [])
+    checkUserSession()
+  }, [checkUserSession])
 
   const handleEditShare = (id: string) => {
     setEditShareId(id)
@@ -68,7 +76,19 @@ export default function Home() {
     return `${val.toFixed(2)}%`
   }
 
-  // Loading skeleton during SSR to avoid hydration flicker
+  // Session loader spinner during page checks
+  if (isAuthLoading && mounted) {
+    return (
+      <div className="flex flex-col flex-1 items-center justify-center bg-background text-foreground min-h-screen">
+        <div className="flex flex-col items-center gap-2.5 animate-pulse select-none">
+          <span className="text-emerald-500 font-bold font-sans text-xl animate-spin">%</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">Syncing Session...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Hydration skeleton loader
   if (!mounted) {
     return (
       <div className="flex flex-col flex-1 items-center justify-center bg-background text-foreground p-8 min-h-screen">
@@ -90,6 +110,15 @@ export default function Home() {
     )
   }
 
+  // Authentication guard redirect
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <AuthScreen />
+      </div>
+    )
+  }
+
   // Math Calculations
   const totalCost = shares.reduce((sum, s) => sum + s.shares * s.purchasePrice, 0)
   const totalValue = shares.reduce((sum, s) => sum + s.shares * s.currentPrice, 0)
@@ -104,23 +133,62 @@ export default function Home() {
   const yieldOnCost = totalCost > 0 ? (forwardAnnualDividends / totalCost) * 100 : 0
   const monthlyAverageIncome = forwardAnnualDividends / 12
 
+  // Find Daily Movers (Gainers / Laggards) for Performance summary card
+  const sharesWithDailyMovers = shares.filter(
+    (s) => s.dayChangePercent !== undefined && s.dayChangePercent !== 0
+  )
+  
+  let topGainer: Share | null = null
+  let topLaggard: Share | null = null
+
+  if (sharesWithDailyMovers.length > 0) {
+    const sortedMovers = [...sharesWithDailyMovers].sort(
+      (a, b) => (b.dayChangePercent || 0) - (a.dayChangePercent || 0)
+    )
+    const first = sortedMovers[0]
+    const last = sortedMovers[sortedMovers.length - 1]
+
+    if (first && first.dayChangePercent !== undefined && first.dayChangePercent > 0) {
+      topGainer = first
+    }
+    if (last && last.dayChangePercent !== undefined && last.dayChangePercent < 0) {
+      topLaggard = last
+    }
+  }
+
   return (
     <div className="flex flex-col flex-1 bg-background text-foreground min-h-screen font-sans antialiased selection:bg-foreground/10 py-6">
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 space-y-6">
         
         {/* Page Actions Header Bar */}
-        {shares.length > 0 && (
-          <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-4">
-            <div className="flex flex-col gap-0.5">
-              <h2 className="text-base font-bold tracking-tight text-foreground uppercase">
-                Portfolio Overview
-              </h2>
-              <p className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">
-                Analyze your holdings and dividend cashflows
-              </p>
+        <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-4">
+          <div className="flex flex-col gap-0.5">
+            <h2 className="text-base font-bold tracking-tight text-foreground uppercase">
+              Portfolio Overview
+            </h2>
+            <p className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">
+              Analyze your holdings and dividend cashflows
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Logged in User Profile Info */}
+            <div className="flex flex-col items-end select-none text-right leading-tight max-w-[100px] sm:max-w-[180px]">
+              <span className="text-[9px] font-mono text-muted-foreground truncate w-full">
+                {user.email}
+              </span>
+              <button
+                onClick={signOut}
+                className="text-[9px] font-bold text-muted-foreground/80 hover:text-destructive transition-colors uppercase tracking-wider cursor-pointer mt-0.5 flex items-center gap-0.5"
+              >
+                <SignOut className="w-3 h-3" /> Sign Out
+              </button>
             </div>
-            <div className="flex items-center gap-2">
+
+            {/* Separator line */}
+            <div className="h-6 w-px bg-border/40 shrink-0" />
+
+            {shares.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -131,17 +199,18 @@ export default function Home() {
                 <ArrowClockwise className={`w-3.5 h-3.5 mr-1 text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
                 {isLoading ? "Syncing..." : "Sync Prices"}
               </Button>
-              <Button
-                onClick={handleAddShare}
-                size="sm"
-                className="h-8 text-[11px] rounded-md font-semibold bg-foreground text-background hover:bg-foreground/90 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1 font-bold" />
-                Add Share
-              </Button>
-            </div>
+            )}
+
+            <Button
+              onClick={handleAddShare}
+              size="sm"
+              className="h-8 text-[11px] rounded-md font-semibold bg-foreground text-background hover:bg-foreground/90 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1 font-bold" />
+              Add Share
+            </Button>
           </div>
-        )}
+        </div>
 
         {error && (
           <div className="bg-destructive/10 border border-destructive/20 text-destructive text-[11px] px-4 py-3 rounded font-mono">
@@ -306,6 +375,35 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
+            {/* Today's Movers Banner */}
+            {(topGainer || topLaggard) && (
+              <div className="bg-card/45 border border-border/70 px-4 py-2.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] select-none font-mono">
+                <div className="flex items-center gap-1.5 font-sans font-bold uppercase tracking-wider text-muted-foreground">
+                  <span>Today's Performance Movers:</span>
+                </div>
+                <div className="flex items-center gap-6">
+                  {topGainer && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground font-sans">Top Gainer:</span>
+                      <span className="font-bold text-foreground">{topGainer.ticker}</span>
+                      <span className="font-bold text-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/15 px-1.5 py-0.5 rounded">
+                        +{topGainer.dayChangePercent?.toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+                  {topLaggard && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground font-sans">Laggard:</span>
+                      <span className="font-bold text-foreground">{topLaggard.ticker}</span>
+                      <span className="font-bold text-destructive bg-destructive/10 dark:bg-destructive/15 px-1.5 py-0.5 rounded">
+                        {topLaggard.dayChangePercent?.toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Charts Component */}
             <PortfolioCharts shares={shares} currency={currency} />
@@ -514,45 +612,53 @@ export default function Home() {
                           {isExpanded && (
                             <tr className="bg-muted/10 dark:bg-muted/5 transition-colors">
                               <td colSpan={8} className="p-4 pl-8 border-b border-border/40">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-2 px-1 text-xs animate-in fade-in slide-in-from-top-1 duration-200">
-                                  {/* PE Ratio */}
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
-                                      P/E Ratio (PER)
-                                    </span>
-                                    <span className="font-semibold font-mono text-foreground text-xs">
-                                      {share.peRatio && share.peRatio > 0 ? share.peRatio.toFixed(2) : "N/A"}
-                                    </span>
+                                <div className="space-y-4">
+                                  {/* Key statistics */}
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-2 px-1 text-xs animate-in fade-in slide-in-from-top-1 duration-200">
+                                    {/* PE Ratio */}
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
+                                        P/E Ratio (PER)
+                                      </span>
+                                      <span className="font-semibold font-mono text-foreground text-xs">
+                                        {share.peRatio && share.peRatio > 0 ? share.peRatio.toFixed(2) : "N/A"}
+                                      </span>
+                                    </div>
+
+                                    {/* Price to Book */}
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
+                                        Price to Book (PBR)
+                                      </span>
+                                      <span className="font-semibold font-mono text-foreground text-xs">
+                                        {share.priceToBook && share.priceToBook > 0 ? share.priceToBook.toFixed(2) : "N/A"}
+                                      </span>
+                                    </div>
+
+                                    {/* Return on Equity */}
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
+                                        Return on Equity (ROE)
+                                      </span>
+                                      <span className="font-semibold font-mono text-emerald-500 dark:text-emerald-400 text-xs">
+                                        {share.returnOnEquity && share.returnOnEquity > 0 ? `${share.returnOnEquity.toFixed(2)}%` : "N/A"}
+                                      </span>
+                                    </div>
+
+                                    {/* EPS */}
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
+                                        Earnings Per Share (EPS)
+                                      </span>
+                                      <span className="font-semibold font-mono text-foreground text-xs">
+                                        {share.eps !== undefined ? formatCurrency(share.eps) : "N/A"}
+                                      </span>
+                                    </div>
                                   </div>
 
-                                  {/* Price to Book */}
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
-                                      Price to Book (PBR)
-                                    </span>
-                                    <span className="font-semibold font-mono text-foreground text-xs">
-                                      {share.priceToBook && share.priceToBook > 0 ? share.priceToBook.toFixed(2) : "N/A"}
-                                    </span>
-                                  </div>
-
-                                  {/* Return on Equity */}
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
-                                      Return on Equity (ROE)
-                                    </span>
-                                    <span className="font-semibold font-mono text-emerald-500 dark:text-emerald-400 text-xs">
-                                      {share.returnOnEquity && share.returnOnEquity > 0 ? `${share.returnOnEquity.toFixed(2)}%` : "N/A"}
-                                    </span>
-                                  </div>
-
-                                  {/* EPS */}
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
-                                      Earnings Per Share (EPS)
-                                    </span>
-                                    <span className="font-semibold font-mono text-foreground text-xs">
-                                      {share.eps !== undefined ? formatCurrency(share.eps) : "N/A"}
-                                    </span>
+                                  {/* Interactive Price History Chart */}
+                                  <div className="border-t border-border/30 pt-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <TickerChart symbol={share.ticker} currency={currency} />
                                   </div>
                                 </div>
                               </td>

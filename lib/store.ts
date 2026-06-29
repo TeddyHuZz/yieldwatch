@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { supabase } from "./supabase"
 
 export interface Share {
   id: string
@@ -7,11 +8,11 @@ export interface Share {
   companyName: string
   shares: number // Quantity purchased
   purchasePrice: number // Price paid per share
-  currentPrice: number // Current market price (updated from API)
-  dividendYield: number // Annual yield percentage (e.g. 4.5 for 4.5%)
-  annualDividendPerShare: number // Annual dividend amount per share (e.g. $1.20)
+  currentPrice: number // Current market price
+  dividendYield: number // Annual yield percentage (e.g. 4.5)
+  annualDividendPerShare: number // Annual dividend amount per share
   frequency: "monthly" | "quarterly" | "semi-annually" | "annually"
-  payoutMonth: number // Month index (0-11) when dividends are paid (or start cycle)
+  payoutMonth: number // Month index (0-11)
   purchaseDate: string // YYYY-MM-DD
   dayChange?: number
   dayChangePercent?: number
@@ -31,11 +32,19 @@ interface PortfolioState {
   currency: string
   triggeredAlerts: string[]
   isLoading: boolean
+  isAuthLoading: boolean
+  user: any | null
   error: string | null
-  addShare: (share: Omit<Share, "id" | "currentPrice" | "lastUpdated">) => void
-  updateShare: (id: string, share: Partial<Share>) => void
-  deleteShare: (id: string) => void
+  loadSharesFromDb: () => Promise<void>
+  addShare: (share: Omit<Share, "id" | "currentPrice" | "lastUpdated">) => Promise<void>
+  updateShare: (id: string, share: Partial<Share>) => Promise<void>
+  deleteShare: (id: string) => Promise<void>
   refreshSharePrices: () => Promise<void>
+  checkUserSession: () => Promise<void>
+  signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
+  signOut: () => Promise<void>
   setError: (error: string | null) => void
   setLoading: (loading: boolean) => void
   setCurrency: (currency: string) => void
@@ -49,6 +58,8 @@ export const usePortfolioStore = create<PortfolioState>()(
       currency: "USD",
       triggeredAlerts: [],
       isLoading: false,
+      isAuthLoading: true,
+      user: null,
       error: null,
       setError: (error) => set({ error }),
       setLoading: (loading) => set({ isLoading: loading }),
@@ -58,41 +69,237 @@ export const usePortfolioStore = create<PortfolioState>()(
           triggeredAlerts: state.triggeredAlerts.filter((_, idx) => idx !== index),
         }))
       },
-      
-      addShare: (share) => {
-        const id = Math.random().toString(36).substring(2, 9)
-        set((state) => ({
-          shares: [
-            ...state.shares,
-            {
-              ...share,
-              id,
-              currentPrice: share.purchasePrice, // default to purchase price
-              lastUpdated: new Date().toISOString(),
+
+      checkUserSession: async () => {
+        set({ isAuthLoading: true })
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            set({ user: session.user, isAuthLoading: false })
+            await get().loadSharesFromDb()
+          } else {
+            set({ user: null, shares: [], isAuthLoading: false })
+          }
+        } catch (err: any) {
+          console.error("Check session error:", err)
+          set({ user: null, shares: [], isAuthLoading: false })
+        }
+      },
+
+      signIn: async (email, password) => {
+        set({ isAuthLoading: true, error: null })
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+          if (error) throw error
+          set({ user: data.user, isAuthLoading: false })
+          await get().loadSharesFromDb()
+        } catch (err: any) {
+          set({ error: err.message || "Failed to sign in", isAuthLoading: false })
+          throw err
+        }
+      },
+
+      signUp: async (email, password) => {
+        set({ isAuthLoading: true, error: null })
+        try {
+          const { data, error } = await supabase.auth.signUp({ email, password })
+          if (error) throw error
+          set({ user: data.user, isAuthLoading: false })
+          await get().loadSharesFromDb()
+        } catch (err: any) {
+          set({ error: err.message || "Failed to sign up", isAuthLoading: false })
+          throw err
+        }
+      },
+
+      signInWithGoogle: async () => {
+        set({ isAuthLoading: true, error: null })
+        try {
+          const { error } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: {
+              redirectTo: `${window.location.origin}/auth/callback`,
             },
-          ],
-        }))
+          })
+          if (error) throw error
+        } catch (err: any) {
+          set({ error: err.message || "Google login failed", isAuthLoading: false })
+          throw err
+        }
       },
 
-      updateShare: (id, updatedFields) => {
-        set((state) => ({
-          shares: state.shares.map((s) =>
-            s.id === id
-              ? { ...s, ...updatedFields, lastUpdated: new Date().toISOString() }
-              : s
-          ),
-        }))
+      signOut: async () => {
+        set({ isAuthLoading: true, error: null })
+        try {
+          const { error } = await supabase.auth.signOut()
+          if (error) throw error
+          set({ user: null, shares: [], isAuthLoading: false })
+        } catch (err: any) {
+          set({ error: err.message || "Failed to sign out", isAuthLoading: false })
+        }
       },
 
-      deleteShare: (id) => {
-        set((state) => ({
-          shares: state.shares.filter((s) => s.id !== id),
-        }))
+      loadSharesFromDb: async () => {
+        const { user } = get()
+        if (!user) return
+
+        set({ isLoading: true, error: null })
+        try {
+          const { data, error } = await supabase
+            .from("shares")
+            .select("*")
+            .order("created_at", { ascending: true })
+
+          if (error) throw error
+
+          // Map snake_case columns from Postgres to camelCase properties in JS
+          const shares: Share[] = (data || []).map((row: any) => ({
+            id: row.id,
+            ticker: row.ticker,
+            companyName: row.company_name,
+            shares: Number(row.shares),
+            purchasePrice: Number(row.purchase_price),
+            currentPrice: Number(row.current_price || 0),
+            dividendYield: Number(row.dividend_yield || 0),
+            annualDividendPerShare: Number(row.annual_dividend_per_share || 0),
+            frequency: row.frequency,
+            payoutMonth: row.payout_month,
+            purchaseDate: row.purchase_date,
+            dayChange: row.day_change !== null ? Number(row.day_change) : undefined,
+            dayChangePercent: row.day_change_percent !== null ? Number(row.day_change_percent) : undefined,
+            volume: row.volume !== null ? Number(row.volume) : undefined,
+            exDividendDate: row.ex_dividend_date || undefined,
+            alertHigh: row.alert_high !== null ? Number(row.alert_high) : undefined,
+            alertLow: row.alert_low !== null ? Number(row.alert_low) : undefined,
+            peRatio: row.pe_ratio !== null ? Number(row.pe_ratio) : undefined,
+            priceToBook: row.price_to_book !== null ? Number(row.price_to_book) : undefined,
+            returnOnEquity: row.return_on_equity !== null ? Number(row.return_on_equity) : undefined,
+            eps: row.eps !== null ? Number(row.eps) : undefined,
+            lastUpdated: row.last_updated || undefined,
+          }))
+
+          set({ shares, isLoading: false })
+        } catch (err: any) {
+          console.error("Database load error:", err)
+          set({ error: err.message || "Failed to load shares", isLoading: false })
+        }
+      },
+
+      addShare: async (share) => {
+        const { user } = get()
+        if (!user) {
+          set({ error: "User is not authenticated" })
+          return
+        }
+
+        set({ isLoading: true, error: null })
+        try {
+          const { error } = await supabase
+            .from("shares")
+            .insert([{
+              user_id: user.id, // Securely bind the share entry to the current user's ID
+              ticker: share.ticker,
+              company_name: share.companyName,
+              shares: share.shares,
+              purchase_price: share.purchasePrice,
+              current_price: share.purchasePrice, // default to purchase price initially
+              dividend_yield: share.dividendYield,
+              annual_dividend_per_share: share.annualDividendPerShare,
+              frequency: share.frequency,
+              payout_month: share.payoutMonth,
+              purchase_date: share.purchaseDate,
+              alert_high: share.alertHigh !== undefined ? share.alertHigh : null,
+              alert_low: share.alertLow !== undefined ? share.alertLow : null,
+              pe_ratio: share.peRatio !== undefined ? share.peRatio : null,
+              price_to_book: share.priceToBook !== undefined ? share.priceToBook : null,
+              return_on_equity: share.returnOnEquity !== undefined ? share.returnOnEquity : null,
+              eps: share.eps !== undefined ? share.eps : null,
+            }])
+
+          if (error) throw error
+
+          const { loadSharesFromDb } = get()
+          await loadSharesFromDb()
+        } catch (err: any) {
+          console.error("Database insert error:", err)
+          set({ error: err.message || "Failed to add share", isLoading: false })
+        }
+      },
+
+      updateShare: async (id, updatedFields) => {
+        const { user } = get()
+        if (!user) return
+
+        set({ isLoading: true, error: null })
+        try {
+          // Map camelCase JS properties back to database columns
+          const dbFields: any = {}
+          if (updatedFields.ticker !== undefined) dbFields.ticker = updatedFields.ticker
+          if (updatedFields.companyName !== undefined) dbFields.company_name = updatedFields.companyName
+          if (updatedFields.shares !== undefined) dbFields.shares = updatedFields.shares
+          if (updatedFields.purchasePrice !== undefined) dbFields.purchase_price = updatedFields.purchasePrice
+          if (updatedFields.currentPrice !== undefined) dbFields.current_price = updatedFields.currentPrice
+          if (updatedFields.dividendYield !== undefined) dbFields.dividend_yield = updatedFields.dividendYield
+          if (updatedFields.annualDividendPerShare !== undefined) dbFields.annual_dividend_per_share = updatedFields.annualDividendPerShare
+          if (updatedFields.frequency !== undefined) dbFields.frequency = updatedFields.frequency
+          if (updatedFields.payoutMonth !== undefined) dbFields.payout_month = updatedFields.payoutMonth
+          if (updatedFields.purchaseDate !== undefined) dbFields.purchase_date = updatedFields.purchaseDate
+          if (updatedFields.dayChange !== undefined) dbFields.day_change = updatedFields.dayChange
+          if (updatedFields.dayChangePercent !== undefined) dbFields.day_change_percent = updatedFields.dayChangePercent
+          if (updatedFields.volume !== undefined) dbFields.volume = updatedFields.volume
+          if (updatedFields.exDividendDate !== undefined) dbFields.ex_dividend_date = updatedFields.exDividendDate
+          if (updatedFields.alertHigh !== undefined) dbFields.alert_high = updatedFields.alertHigh
+          if (updatedFields.alertLow !== undefined) dbFields.alert_low = updatedFields.alertLow
+          if (updatedFields.peRatio !== undefined) dbFields.pe_ratio = updatedFields.peRatio
+          if (updatedFields.priceToBook !== undefined) dbFields.price_to_book = updatedFields.priceToBook
+          if (updatedFields.returnOnEquity !== undefined) dbFields.return_on_equity = updatedFields.returnOnEquity
+          if (updatedFields.eps !== undefined) dbFields.eps = updatedFields.eps
+          if (updatedFields.lastUpdated !== undefined) dbFields.last_updated = updatedFields.lastUpdated
+
+          const { error } = await supabase
+            .from("shares")
+            .update(dbFields)
+            .eq("id", id)
+
+          if (error) throw error
+
+          // Sync local state
+          set((state) => ({
+            shares: state.shares.map((s) => (s.id === id ? { ...s, ...updatedFields } : s)),
+            isLoading: false,
+          }))
+        } catch (err: any) {
+          console.error("Database update error:", err)
+          set({ error: err.message || "Failed to update share", isLoading: false })
+        }
+      },
+
+      deleteShare: async (id) => {
+        const { user } = get()
+        if (!user) return
+
+        set({ isLoading: true, error: null })
+        try {
+          const { error } = await supabase
+            .from("shares")
+            .delete()
+            .eq("id", id)
+
+          if (error) throw error
+
+          set((state) => ({
+            shares: state.shares.filter((s) => s.id !== id),
+            isLoading: false,
+          }))
+        } catch (err: any) {
+          console.error("Database delete error:", err)
+          set({ error: err.message || "Failed to delete share", isLoading: false })
+        }
       },
 
       refreshSharePrices: async () => {
-        const { shares } = get()
-        if (shares.length === 0) return
+        const { shares, user } = get()
+        if (!user || shares.length === 0) return
 
         set({ isLoading: true, error: null })
         try {
@@ -119,7 +326,7 @@ export const usePortfolioStore = create<PortfolioState>()(
                   )
                 }
 
-                return {
+                const updated = {
                   ...share,
                   currentPrice,
                   companyName: data.companyName || share.companyName,
@@ -136,6 +343,29 @@ export const usePortfolioStore = create<PortfolioState>()(
                   eps: typeof data.eps === "number" ? data.eps : share.eps,
                   lastUpdated: new Date().toISOString(),
                 }
+
+                // Sync refreshed quotes back to Supabase
+                await supabase
+                  .from("shares")
+                  .update({
+                    current_price: updated.currentPrice,
+                    company_name: updated.companyName,
+                    dividend_yield: updated.dividendYield,
+                    annual_dividend_per_share: updated.annualDividendPerShare,
+                    frequency: updated.frequency,
+                    day_change: updated.dayChange,
+                    day_change_percent: updated.dayChangePercent,
+                    volume: updated.volume,
+                    ex_dividend_date: updated.exDividendDate,
+                    pe_ratio: updated.peRatio,
+                    price_to_book: updated.priceToBook,
+                    return_on_equity: updated.returnOnEquity,
+                    eps: updated.eps,
+                    last_updated: updated.lastUpdated,
+                  })
+                  .eq("id", share.id)
+
+                return updated
               } catch (e) {
                 console.error(`Failed to refresh price for ${share.ticker}:`, e)
                 return share
@@ -148,17 +378,17 @@ export const usePortfolioStore = create<PortfolioState>()(
             triggeredAlerts: [...state.triggeredAlerts, ...newAlerts],
           }))
         } catch (err: any) {
+          console.error("Database sync refresh error:", err)
           set({ error: err.message || "Failed to refresh prices", isLoading: false })
         }
       },
     }),
     {
-      name: "yieldwatch-portfolio",
+      name: "yieldwatch-portfolio-settings",
       partialize: (state) => ({
-        shares: state.shares,
         currency: state.currency,
         triggeredAlerts: state.triggeredAlerts,
-      }), // Persist shares, currency, and triggered alerts
+      }), // Persist client configuration settings, exclude database-managed shares list
     }
   )
 )

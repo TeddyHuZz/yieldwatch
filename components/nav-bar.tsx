@@ -5,12 +5,14 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Sun, Moon, ChartBar, Newspaper } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { usePortfolioStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 export function NavBar() {
   const pathname = usePathname()
   const [theme, setTheme] = useState<"light" | "dark">("light")
   const [mounted, setMounted] = useState(false)
+  const { user } = usePortfolioStore()
 
   // Sync theme status on mount
   useEffect(() => {
@@ -54,34 +56,36 @@ export function NavBar() {
           </p>
         </Link>
 
-        {/* Mid Navigation */}
-        <nav className="flex items-center gap-1 sm:gap-2">
-          <Link
-            href="/"
-            className={cn(
-              "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
-              pathname === "/"
-                ? "bg-foreground/10 text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-            )}
-          >
-            <ChartBar className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Dashboard</span>
-          </Link>
-          <Link
-            href="/news"
-            className={cn(
-              "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
-              pathname === "/news"
-                ? "bg-foreground/10 text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-            )}
-          >
-            <Newspaper className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">News & Analysis</span>
-            <span className="inline sm:hidden">News</span>
-          </Link>
-        </nav>
+        {/* Mid Navigation - Visible only when user is authenticated */}
+        {user && (
+          <nav className="flex items-center gap-1 sm:gap-2">
+            <Link
+              href="/"
+              className={cn(
+                "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
+                pathname === "/"
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              )}
+            >
+              <ChartBar className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+            <Link
+              href="/news"
+              className={cn(
+                "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
+                pathname === "/news"
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              )}
+            >
+              <Newspaper className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">News & Analysis</span>
+              <span className="inline sm:hidden">News</span>
+            </Link>
+          </nav>
+        )}
 
         {/* Right Action: Theme Switcher */}
         <div className="flex items-center">
