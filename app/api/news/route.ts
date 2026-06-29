@@ -3,7 +3,7 @@ import YahooFinance from "yahoo-finance2"
 
 const yahooFinance = new YahooFinance()
 
-// Robust XML RSS feed fetcher and custom parser (no external package dependencies)
+// Custom XML RSS feed fetcher and parser
 async function fetchRssFeed(url: string, defaultSource: string) {
   try {
     const res = await fetch(url, {
@@ -27,6 +27,15 @@ async function fetchRssFeed(url: string, defaultSource: string) {
         content.match(/<title>([\s\S]*?)<\/title>/)
       const title = titleMatch ? titleMatch[1].trim() : ""
 
+      // Split title to extract source from Google News format "Headline - Source"
+      let headline = title
+      let source = defaultSource
+      if (title.includes(" - ")) {
+        const parts = title.split(" - ")
+        source = parts.pop() || defaultSource
+        headline = parts.join(" - ")
+      }
+
       // Extract link
       const linkMatch = content.match(/<link>([\s\S]*?)<\/link>/)
       const link = linkMatch ? linkMatch[1].trim() : ""
@@ -47,27 +56,37 @@ async function fetchRssFeed(url: string, defaultSource: string) {
         content.match(/<description>([\s\S]*?)<\/description>/)
       let summary = ""
       if (descMatch) {
-        summary = descMatch[1]
-          .replace(/<[^>]*>/g, "") // strip HTML tags
+        // 1. Unescape HTML entities first so we can parse tags correctly
+        const unescaped = descMatch[1]
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
           .replace(/&amp;/g, "&")
           .replace(/&quot;/g, '"')
           .replace(/&apos;/g, "'")
-          .trim()
-        if (summary.length > 220) {
-          summary = summary.slice(0, 220) + "..."
+          .replace(/&#39;/g, "'")
+
+        // 2. Strip HTML tags
+        let cleanText = unescaped.replace(/<[^>]*>/g, "").trim()
+
+        // 3. Set summary based on feed source
+        if (url.includes("news.google.com")) {
+          // Google News descriptions duplicate the headline with related hyperlinks.
+          // We set it to empty so the UI renders a clean card layout.
+          summary = ""
+        } else {
+          if (cleanText.length > 220) {
+            cleanText = cleanText.slice(0, 220) + "..."
+          }
+          summary = cleanText
         }
       }
 
-      // Extract source if available (e.g. <source> tag)
-      const sourceMatch = content.match(/<source[^>]*>([\s\S]*?)<\/source>/)
-      const source = sourceMatch ? sourceMatch[1].trim() : defaultSource
-
-      if (title && link) {
+      if (headline && link) {
         items.push({
           id: link,
           datetime,
-          headline: title,
-          summary: summary || "Click to view full coverage.",
+          headline,
+          summary,
           source,
           url: link,
           image: "",
@@ -84,6 +103,7 @@ async function fetchRssFeed(url: string, defaultSource: string) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const symbol = searchParams.get("symbol")
+  const name = searchParams.get("name")
   const category = searchParams.get("category") || "general"
 
   const apiKey = process.env.FINNHUB_API_KEY
@@ -92,7 +112,6 @@ export async function GET(request: Request) {
   if (apiKey) {
     try {
       if (symbol) {
-        // Fetch company news for last 30 days
         const todayStr = new Date().toISOString().split("T")[0]
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
@@ -117,7 +136,6 @@ export async function GET(request: Request) {
           return NextResponse.json(formattedNews)
         }
       } else {
-        // Fetch general news
         const url = `https://finnhub.io/api/v1/news?category=${encodeURIComponent(
           category
         )}&token=${apiKey}`
@@ -142,17 +160,35 @@ export async function GET(request: Request) {
     }
   }
 
-  // 2. Fallback to RSS Feeds (Yahoo Finance RSS) if Finnhub is not set up
+  // 2. Fallback to RSS Feeds if Finnhub is not set up
   try {
-    const rssUrl = symbol
-      ? `https://finance.yahoo.com/rss/headline?s=${encodeURIComponent(symbol)}`
-      : "https://finance.yahoo.com/news/rssindex"
+    if (symbol) {
+      let queryName = symbol
+      if (name) {
+        queryName = name
+      } else {
+        try {
+          const quote = await yahooFinance.quote(symbol)
+          if (quote) {
+            queryName = quote.longName || quote.shortName || symbol
+          }
+        } catch (e) {
+          console.warn(`Failed to resolve quote name for ticker news ${symbol}:`, e)
+        }
+      }
 
-    const defaultSource = symbol ? symbol.toUpperCase() : "Yahoo Finance"
-    const rssArticles = await fetchRssFeed(rssUrl, defaultSource)
-
-    if (rssArticles && rssArticles.length > 0) {
-      return NextResponse.json(rssArticles)
+      const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(queryName)}`
+      const rssArticles = await fetchRssFeed(rssUrl, "Google News")
+      
+      if (rssArticles && rssArticles.length > 0) {
+        return NextResponse.json(rssArticles)
+      }
+    } else {
+      const rssUrl = "https://finance.yahoo.com/news/rssindex"
+      const rssArticles = await fetchRssFeed(rssUrl, "Yahoo Finance")
+      if (rssArticles && rssArticles.length > 0) {
+        return NextResponse.json(rssArticles)
+      }
     }
   } catch (rssErr) {
     console.warn("RSS news retrieval failed, falling back to search API:", rssErr)

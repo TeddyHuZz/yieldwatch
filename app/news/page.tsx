@@ -65,7 +65,10 @@ export default function NewsPage() {
         await Promise.all(
           uniqueTickers.map(async (ticker) => {
             try {
-              const res = await fetch(`/api/news?symbol=${encodeURIComponent(ticker)}`)
+              const companyName = shares.find((s) => s.ticker === ticker)?.companyName || ticker
+              const res = await fetch(
+                `/api/news?symbol=${encodeURIComponent(ticker)}&name=${encodeURIComponent(companyName)}`
+              )
               if (res.ok) {
                 const data = await res.json()
                 if (Array.isArray(data)) {
