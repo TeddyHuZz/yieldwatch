@@ -38,7 +38,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Guard protected layouts
-  const protectedRoutes = ["/news", "/insights", "/profile"]
+  const protectedRoutes = ["/news", "/insights", "/profile", "/calendar"]
   const isProtectedRoute = protectedRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   )

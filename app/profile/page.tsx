@@ -41,6 +41,8 @@ export default function ProfilePage() {
   const [logDate, setLogDate] = useState(new Date().toISOString().split("T")[0])
   const [logLoading, setLogLoading] = useState(false)
 
+  const [currentTheme, setCurrentTheme] = useState<"light" | "dark">("dark")
+
   const {
     user,
     isAuthLoading,
@@ -54,7 +56,22 @@ export default function ProfilePage() {
   useEffect(() => {
     setMounted(true)
     checkUserSession()
+
+    // Sync theme on mount
+    const isDark = document.documentElement.classList.contains("dark") || localStorage.theme === "dark"
+    setCurrentTheme(isDark ? "dark" : "light")
   }, [checkUserSession])
+
+  const handleToggleTheme = (themeMode: "light" | "dark") => {
+    setCurrentTheme(themeMode)
+    if (themeMode === "dark") {
+      document.documentElement.classList.add("dark")
+      localStorage.theme = "dark"
+    } else {
+      document.documentElement.classList.remove("dark")
+      localStorage.theme = "light"
+    }
+  }
 
   // Load dividend logs from Supabase
   const loadLogs = useCallback(async () => {
@@ -360,6 +377,42 @@ export default function ProfilePage() {
                       </div>
                       <p className="text-[9px] text-muted-foreground leading-relaxed pt-1 font-mono">
                         Sets currency formatting globally across dashboard calculations, summaries, and monthly dividend cashflow charts.
+                      </p>
+                    </div>
+
+                    {/* Interface Theme Toggle */}
+                    <div className="space-y-2 pt-5 border-t border-border/30">
+                      <label className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider block">
+                        Interface Theme
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleTheme("light")}
+                          className={`h-8 text-[11px] px-3 rounded-lg font-mono font-bold transition-all cursor-pointer ${
+                            currentTheme === "light"
+                              ? "bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500 shadow-sm font-black"
+                              : "border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          Light Mode
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleTheme("dark")}
+                          className={`h-8 text-[11px] px-3 rounded-lg font-mono font-bold transition-all cursor-pointer ${
+                            currentTheme === "dark"
+                              ? "bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500 shadow-sm font-black"
+                              : "border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          Dark Mode
+                        </Button>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground leading-relaxed pt-1 font-mono">
+                        Toggle the application design scheme between high-contrast dark theme and minimal light layout.
                       </p>
                     </div>
 
