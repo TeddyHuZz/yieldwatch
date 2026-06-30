@@ -1,8 +1,9 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google"
-import "./globals.css"
 import { NavBar } from "@/components/nav-bar"
+import { Footer } from "@/components/footer"
 import { cn } from "@/lib/utils"
+import "./globals.css"
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
@@ -61,7 +62,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <NavBar />
-        {children}
+        <div className="grow flex flex-col">
+          {children}
+        </div>
+        <Footer />
       </body>
     </html>
   )
