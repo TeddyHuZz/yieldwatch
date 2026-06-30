@@ -21,6 +21,7 @@ import {
   TrendUp,
   BellSimple,
   SignOut,
+  DownloadSimple,
 } from "@phosphor-icons/react"
 
 export default function Home() {
@@ -28,6 +29,9 @@ export default function Home() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editShareId, setEditShareId] = useState<string | null>(null)
   const [expandedShareId, setExpandedShareId] = useState<string | null>(null)
+  
+  // Currency Exchange Rates State
+  const [rates, setRates] = useState<Record<string, number>>({})
 
   const {
     shares,
@@ -50,6 +54,16 @@ export default function Home() {
     checkUserSession()
   }, [checkUserSession])
 
+  // Fetch exchange rates on mount
+  useEffect(() => {
+    fetch("/api/exchange-rates")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.rates) setRates(data.rates)
+      })
+      .catch((err) => console.error("Failed to load exchange rates:", err))
+  }, [])
+
   const handleEditShare = (id: string) => {
     setEditShareId(id)
     setIsDialogOpen(true)
@@ -64,6 +78,34 @@ export default function Home() {
     setExpandedShareId(expandedShareId === id ? null : id)
   }
 
+  // Deduce the native trading currency of a stock symbol based on its exchange suffix
+  const getTickerCurrency = (ticker: string): string => {
+    const upper = ticker.toUpperCase().trim()
+    if (upper.endsWith(".KL")) return "MYR" // Bursa Malaysia
+    if (upper.endsWith(".SI")) return "SGD" // SGX
+    if (upper.endsWith(".TO")) return "CAD" // TSX
+    if (upper.endsWith(".AX")) return "AUD" // ASX
+    if (upper.endsWith(".L")) return "GBP"  // LSE
+    if (upper.endsWith(".DE")) return "EUR" // XETRA
+    if (upper.endsWith(".T")) return "JPY"  // TSE
+    if (upper.endsWith(".HK")) return "HKD" // HKEX
+    return "USD" // Default to USD (NASDAQ, NYSE)
+  }
+
+  // Convert live rates to chosen display currency format
+  const convertValue = (val: number, ticker: string, targetCurrency: string): number => {
+    if (!rates || Object.keys(rates).length === 0) return val
+    const native = getTickerCurrency(ticker)
+    if (native === targetCurrency) return val
+
+    const rateNative = rates[native] || 1
+    const rateTarget = rates[targetCurrency] || 1
+
+    // Target Value = Native Value / (Native rate against USD) * (Target rate against USD)
+    const valueInUsd = val / rateNative
+    return valueInUsd * rateTarget
+  }
+
   // Format helper functions
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -74,6 +116,53 @@ export default function Home() {
 
   const formatPercent = (val: number) => {
     return `${val.toFixed(2)}%`
+  }
+
+  // Export holdings table to clean CSV format
+  const handleExportCSV = () => {
+    const headers = [
+      "Ticker",
+      "Company Name",
+      "Shares Held",
+      "Avg Purchase Price (Native)",
+      "Current Price (Native)",
+      "Daily Change %",
+      "Dividend Yield %",
+      "Payout Frequency",
+      "Payout Month Index (0-11)",
+      "Purchase Date",
+    ]
+
+    const rows = shares.map((s) => [
+      s.ticker,
+      s.companyName,
+      s.shares,
+      s.purchasePrice,
+      s.currentPrice,
+      s.dayChangePercent !== undefined ? `${s.dayChangePercent.toFixed(2)}%` : "0%",
+      s.dividendYield.toFixed(2),
+      s.frequency,
+      s.payoutMonth,
+      s.purchaseDate,
+    ])
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((val) => `"${val}"`).join(",")),
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute(
+      "download",
+      `yieldwatch_portfolio_${new Date().toISOString().split("T")[0]}.csv`
+    )
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   // Session loader spinner during page checks
@@ -119,14 +208,20 @@ export default function Home() {
     )
   }
 
-  // Math Calculations
-  const totalCost = shares.reduce((sum, s) => sum + s.shares * s.purchasePrice, 0)
-  const totalValue = shares.reduce((sum, s) => sum + s.shares * s.currentPrice, 0)
+  // Math Calculations (with active currency conversions)
+  const totalCost = shares.reduce(
+    (sum, s) => sum + convertValue(s.shares * s.purchasePrice, s.ticker, currency),
+    0
+  )
+  const totalValue = shares.reduce(
+    (sum, s) => sum + convertValue(s.shares * s.currentPrice, s.ticker, currency),
+    0
+  )
   const totalReturn = totalValue - totalCost
   const totalReturnPercent = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0
 
   const forwardAnnualDividends = shares.reduce(
-    (sum, s) => sum + s.shares * s.annualDividendPerShare,
+    (sum, s) => sum + convertValue(s.shares * s.annualDividendPerShare, s.ticker, currency),
     0
   )
   const portfolioYield = totalValue > 0 ? (forwardAnnualDividends / totalValue) * 100 : 0
@@ -162,7 +257,7 @@ export default function Home() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 space-y-6">
         
         {/* Page Actions Header Bar */}
-        <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between border-b border-border/40 pb-4 mb-4">
           <div className="flex flex-col gap-0.5">
             <h2 className="text-base font-bold tracking-tight text-foreground uppercase">
               Portfolio Overview
@@ -171,34 +266,30 @@ export default function Home() {
               Analyze your holdings and dividend cashflows
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Logged in User Profile Info */}
-            <div className="flex flex-col items-end select-none text-right leading-tight max-w-[100px] sm:max-w-[180px]">
-              <span className="text-[9px] font-mono text-muted-foreground truncate w-full">
-                {user.email}
-              </span>
-              <button
-                onClick={signOut}
-                className="text-[9px] font-bold text-muted-foreground/80 hover:text-destructive transition-colors uppercase tracking-wider cursor-pointer mt-0.5 flex items-center gap-0.5"
-              >
-                <SignOut className="w-3 h-3" /> Sign Out
-              </button>
-            </div>
-
-            {/* Separator line */}
-            <div className="h-6 w-px bg-border/40 shrink-0" />
-
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
             {shares.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={refreshSharePrices}
-                disabled={isLoading}
-                className="h-8 text-[11px] rounded-md border-border/80 hover:bg-muted/40 font-medium transition-colors cursor-pointer"
-              >
-                <ArrowClockwise className={`w-3.5 h-3.5 mr-1 text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
-                {isLoading ? "Syncing..." : "Sync Prices"}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportCSV}
+                  className="h-8 text-[11px] rounded-md border-border/80 hover:bg-muted/40 font-medium transition-colors cursor-pointer"
+                  title="Export portfolio as CSV file"
+                >
+                  <DownloadSimple className="w-3.5 h-3.5 sm:mr-1 text-muted-foreground" />
+                  <span className="hidden sm:inline">Export CSV</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refreshSharePrices}
+                  disabled={isLoading}
+                  className="h-8 text-[11px] rounded-md border-border/80 hover:bg-muted/40 font-medium transition-colors cursor-pointer"
+                >
+                  <ArrowClockwise className={`w-3.5 h-3.5 mr-1 text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
+                  {isLoading ? "Syncing..." : "Sync Prices"}
+                </Button>
+              </>
             )}
 
             <Button
@@ -278,7 +369,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <h2 className="text-xl font-bold font-mono tracking-tight text-foreground">
+                  <h2 className="text-lg sm:text-xl font-bold font-mono tracking-tight text-foreground truncate">
                     {formatCurrency(totalValue)}
                   </h2>
                 </div>
@@ -311,7 +402,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <h2 className="text-xl font-bold font-mono tracking-tight text-foreground">
+                  <h2 className="text-lg sm:text-xl font-bold font-mono tracking-tight text-foreground truncate">
                     {formatCurrency(totalCost)}
                   </h2>
                 </div>
@@ -332,7 +423,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <h2 className="text-xl font-bold font-mono tracking-tight text-foreground">
+                  <h2 className="text-lg sm:text-xl font-bold font-mono tracking-tight text-foreground truncate">
                     {formatCurrency(forwardAnnualDividends)}
                   </h2>
                 </div>
@@ -363,7 +454,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <h2 className="text-xl font-bold font-mono tracking-tight text-foreground">
+                  <h2 className="text-lg sm:text-xl font-bold font-mono tracking-tight text-foreground truncate">
                     {formatCurrency(monthlyAverageIncome)}
                   </h2>
                 </div>
@@ -406,7 +497,14 @@ export default function Home() {
             )}
 
             {/* Charts Component */}
-            <PortfolioCharts shares={shares} currency={currency} />
+            <PortfolioCharts
+              shares={shares.map((s) => ({
+                ...s,
+                currentPrice: convertValue(s.currentPrice, s.ticker, currency),
+                annualDividendPerShare: convertValue(s.annualDividendPerShare, s.ticker, currency),
+              }))}
+              currency={currency}
+            />
 
             {/* Holdings Details Section */}
             <div className="space-y-3.5">
@@ -441,24 +539,30 @@ export default function Home() {
                   <thead>
                     <tr className="border-b border-border/60 bg-muted/20 text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
                       <th className="p-4 pl-5">Asset</th>
-                      <th className="p-4 text-right">Shares</th>
+                      <th className="p-4 text-right hidden sm:table-cell">Shares</th>
                       <th className="p-4 text-right hidden sm:table-cell">Avg Cost / Price</th>
                       <th className="p-4 text-right">Cost / Value</th>
                       <th className="p-4 text-right">Total Return</th>
                       <th className="p-4 text-right hidden md:table-cell">Yield / YOC</th>
-                      <th className="p-4 text-right">Annual Dividends</th>
+                      <th className="p-4 text-right hidden sm:table-cell">Annual Dividends</th>
                       <th className="p-4 text-center pr-5">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40 font-mono text-[11px] text-foreground">
                     {shares.map((share) => {
-                      const shareCost = share.shares * share.purchasePrice
-                      const shareValue = share.shares * share.currentPrice
+                      // Apply live conversions for calculations
+                      const convertedPurchasePrice = convertValue(share.purchasePrice, share.ticker, currency)
+                      const convertedCurrentPrice = convertValue(share.currentPrice, share.ticker, currency)
+                      const convertedDayChange = convertValue(share.dayChange || 0, share.ticker, currency)
+                      const convertedAnnualDividend = convertValue(share.annualDividendPerShare, share.ticker, currency)
+
+                      const shareCost = share.shares * convertedPurchasePrice
+                      const shareValue = share.shares * convertedCurrentPrice
                       const shareReturn = shareValue - shareCost
                       const shareReturnPercent = shareCost > 0 ? (shareReturn / shareCost) * 100 : 0
                       const shareYieldOnCost =
-                        share.purchasePrice > 0
-                          ? (share.annualDividendPerShare / share.purchasePrice) * 100
+                        convertedPurchasePrice > 0
+                          ? (convertedAnnualDividend / convertedPurchasePrice) * 100
                           : 0
 
                       const isExpanded = expandedShareId === share.id
@@ -495,8 +599,8 @@ export default function Home() {
                               </div>
                             </td>
 
-                            {/* Shares */}
-                            <td className="p-4 text-right font-medium">
+                            {/* Shares (hidden on mobile, expandable in drawer) */}
+                            <td className="p-4 text-right font-medium hidden sm:table-cell">
                               <div>
                                 {share.shares.toLocaleString(undefined, {
                                   minimumFractionDigits: 0,
@@ -510,16 +614,16 @@ export default function Home() {
                               )}
                             </td>
 
-                            {/* Avg Cost / Price */}
+                            {/* Avg Cost / Price (hidden on mobile) */}
                             <td className="p-4 text-right hidden sm:table-cell text-muted-foreground font-mono">
-                              <div>{formatCurrency(share.purchasePrice)}</div>
+                              <div>{formatCurrency(convertedPurchasePrice)}</div>
                               <div className="flex flex-col items-end">
                                 <span className="text-[10px] text-foreground font-semibold">
-                                  {formatCurrency(share.currentPrice)}
+                                  {formatCurrency(convertedCurrentPrice)}
                                 </span>
                                 {share.dayChange !== undefined && share.dayChangePercent !== undefined && share.dayChange !== 0 && (
                                   <span className={`text-[9px] font-semibold font-mono ${share.dayChange >= 0 ? "text-emerald-500" : "text-destructive"}`}>
-                                    {share.dayChange >= 0 ? "+" : ""}{share.dayChange.toFixed(2)} ({share.dayChangePercent >= 0 ? "+" : ""}{share.dayChangePercent.toFixed(2)}%)
+                                    {share.dayChange >= 0 ? "+" : ""}{convertedDayChange.toFixed(2)} ({share.dayChangePercent >= 0 ? "+" : ""}{share.dayChangePercent.toFixed(2)}%)
                                   </span>
                                 )}
                               </div>
@@ -555,7 +659,7 @@ export default function Home() {
                               </div>
                             </td>
 
-                            {/* Yield / YOC */}
+                            {/* Yield / YOC (hidden on mobile) */}
                             <td className="p-4 text-right hidden md:table-cell">
                               <div className="text-muted-foreground">
                                 {formatPercent(share.dividendYield)}
@@ -565,10 +669,10 @@ export default function Home() {
                               </div>
                             </td>
 
-                            {/* Annual Dividends */}
-                            <td className="p-4 text-right">
+                            {/* Annual Dividends (hidden on mobile) */}
+                            <td className="p-4 text-right hidden sm:table-cell">
                               <div className="font-semibold text-foreground">
-                                {formatCurrency(share.shares * share.annualDividendPerShare)}
+                                {formatCurrency(share.shares * convertedAnnualDividend)}
                               </div>
                               <div className="text-[8px] text-muted-foreground uppercase font-sans font-bold tracking-wider mt-0.5">
                                 {share.frequency}
@@ -610,11 +714,31 @@ export default function Home() {
 
                           {/* Expandable Key Fundamentals Row */}
                           {isExpanded && (
-                            <tr className="bg-muted/10 dark:bg-muted/5 transition-colors">
-                              <td colSpan={8} className="p-4 pl-8 border-b border-border/40">
+                            <tr className="bg-muted/10 dark:bg-muted/5 transition-colors animate-in fade-in duration-200">
+                              <td colSpan={8} className="p-4 pl-6 sm:pl-8 border-b border-border/40">
                                 <div className="space-y-4">
+                                  {/* Mobile-friendly fallback for hidden columns */}
+                                  <div className="grid grid-cols-2 gap-4 py-2 border-b border-border/25 text-[10px] font-mono sm:hidden">
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-[9px] uppercase font-bold text-muted-foreground font-sans tracking-wider">Shares Owned</span>
+                                      <span className="font-bold text-foreground">{share.shares.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-[9px] uppercase font-bold text-muted-foreground font-sans tracking-wider">Avg Cost Price</span>
+                                      <span className="font-bold text-foreground">{formatCurrency(convertedPurchasePrice)}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-[9px] uppercase font-bold text-muted-foreground font-sans tracking-wider">Annual Income</span>
+                                      <span className="font-bold text-foreground">{formatCurrency(share.shares * convertedAnnualDividend)}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-[9px] uppercase font-bold text-muted-foreground font-sans tracking-wider">Yield / YOC</span>
+                                      <span className="font-bold text-emerald-500">{share.dividendYield.toFixed(2)}% / {shareYieldOnCost.toFixed(2)}%</span>
+                                    </div>
+                                  </div>
+
                                   {/* Key statistics */}
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-2 px-1 text-xs animate-in fade-in slide-in-from-top-1 duration-200">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-2 px-1 text-xs">
                                     {/* PE Ratio */}
                                     <div className="flex flex-col gap-1">
                                       <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider font-sans">
@@ -651,13 +775,13 @@ export default function Home() {
                                         Earnings Per Share (EPS)
                                       </span>
                                       <span className="font-semibold font-mono text-foreground text-xs">
-                                        {share.eps !== undefined ? formatCurrency(share.eps) : "N/A"}
+                                        {share.eps !== undefined ? formatCurrency(convertValue(share.eps, share.ticker, currency)) : "N/A"}
                                       </span>
                                     </div>
                                   </div>
 
                                   {/* Interactive Price History Chart */}
-                                  <div className="border-t border-border/30 pt-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                  <div className="border-t border-border/30 pt-3">
                                     <TickerChart symbol={share.ticker} currency={currency} />
                                   </div>
                                 </div>

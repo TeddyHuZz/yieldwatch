@@ -122,6 +122,10 @@ export async function GET(request: Request) {
       score,
       safetyGrade,
       trend,
+    }, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600"
+      }
     })
   } catch (error: any) {
     console.error(`Failed to analyze stock ${symbolUpper}:`, error)

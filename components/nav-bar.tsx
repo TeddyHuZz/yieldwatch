@@ -14,7 +14,7 @@ export function NavBar() {
   const [mounted, setMounted] = useState(false)
   const { user } = usePortfolioStore()
 
-  // Sync theme status on mount
+  // Sync theme status on mount and register PWA service worker
   useEffect(() => {
     setMounted(true)
     const isDark =
@@ -28,6 +28,27 @@ export function NavBar() {
     } else {
       setTheme("light")
       document.documentElement.classList.remove("dark")
+    }
+
+    if ("serviceWorker" in navigator) {
+      const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      if (isLocal) {
+        // Automatically unregister service worker in development to avoid caching dev assets/HMR
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) {
+            registration.unregister().then((unregistered) => {
+              if (unregistered) {
+                console.log("Unregistered service worker from localhost dev server")
+                window.location.reload()
+              }
+            })
+          }
+        })
+      } else if (window.location.protocol === "https:") {
+        navigator.serviceWorker.register("/sw.js").catch((err) => {
+          console.warn("PWA ServiceWorker registration failed: ", err)
+        })
+      }
     }
   }, [])
 
@@ -82,7 +103,6 @@ export function NavBar() {
             >
               <Newspaper className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">News & Analysis</span>
-              <span className="inline sm:hidden">News</span>
             </Link>
             <Link
               href="/insights"
@@ -95,7 +115,6 @@ export function NavBar() {
             >
               <ChartLineUp className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Insights</span>
-              <span className="inline sm:hidden">Insights</span>
             </Link>
             <Link
               href="/profile"
@@ -108,7 +127,6 @@ export function NavBar() {
             >
               <User className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Profile</span>
-              <span className="inline sm:hidden">Me</span>
             </Link>
           </nav>
         )}

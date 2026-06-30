@@ -189,7 +189,7 @@ export default function NewsPage() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 space-y-6">
         
         {/* Navigation & Title Divider */}
-        <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between border-b border-border/40 pb-4 mb-4">
           <div className="flex flex-col gap-0.5">
             <h2 className="text-base font-bold tracking-tight text-foreground uppercase flex items-center gap-2">
               <Newspaper className="w-4 h-4 text-muted-foreground" /> News & Analysis
@@ -199,22 +199,6 @@ export default function NewsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* User Profile Info */}
-            <div className="flex flex-col items-end select-none text-right leading-tight max-w-[100px] sm:max-w-[180px]">
-              <span className="text-[9px] font-mono text-muted-foreground truncate w-full">
-                {user.email}
-              </span>
-              <button
-                onClick={signOut}
-                className="text-[9px] font-bold text-muted-foreground/80 hover:text-destructive transition-colors uppercase tracking-wider cursor-pointer mt-0.5 flex items-center gap-0.5"
-              >
-                <SignOut className="w-3 h-3" /> Sign Out
-              </button>
-            </div>
-
-            {/* Separator */}
-            <div className="h-6 w-px bg-border/40 shrink-0" />
-
             <Button
               variant="outline"
               size="sm"

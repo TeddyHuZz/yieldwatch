@@ -186,23 +186,47 @@ export const usePortfolioStore = create<PortfolioState>()(
       },
 
       addShare: async (share) => {
-        const { user } = get()
+        const { user, shares } = get()
         if (!user) {
           set({ error: "User is not authenticated" })
           return
         }
 
-        set({ isLoading: true, error: null })
+        const originalShares = [...shares]
+        const tempId = `temp-${Date.now()}`
+        const optimisticShare: Share = {
+          id: tempId,
+          ticker: share.ticker,
+          companyName: share.companyName,
+          shares: share.shares,
+          purchasePrice: share.purchasePrice,
+          currentPrice: share.purchasePrice, // default to cost initially
+          dividendYield: share.dividendYield,
+          annualDividendPerShare: share.annualDividendPerShare,
+          frequency: share.frequency,
+          payoutMonth: share.payoutMonth,
+          purchaseDate: share.purchaseDate,
+          alertHigh: share.alertHigh,
+          alertLow: share.alertLow,
+          peRatio: share.peRatio,
+          priceToBook: share.priceToBook,
+          returnOnEquity: share.returnOnEquity,
+          eps: share.eps,
+        }
+
+        // Optimistically add to state
+        set({ shares: [...originalShares, optimisticShare], error: null })
+
         try {
-          const { error } = await supabase
+          const { data, error } = await supabase
             .from("shares")
             .insert([{
-              user_id: user.id, // Securely bind the share entry to the current user's ID
+              user_id: user.id,
               ticker: share.ticker,
               company_name: share.companyName,
               shares: share.shares,
               purchase_price: share.purchasePrice,
-              current_price: share.purchasePrice, // default to purchase price initially
+              current_price: share.purchasePrice,
               dividend_yield: share.dividendYield,
               annual_dividend_per_share: share.annualDividendPerShare,
               frequency: share.frequency,
@@ -215,24 +239,41 @@ export const usePortfolioStore = create<PortfolioState>()(
               return_on_equity: share.returnOnEquity !== undefined ? share.returnOnEquity : null,
               eps: share.eps !== undefined ? share.eps : null,
             }])
+            .select()
 
           if (error) throw error
 
-          const { loadSharesFromDb } = get()
-          await loadSharesFromDb()
+          // Swap temp ID with real DB ID
+          if (data && data[0]) {
+            const dbShare = data[0]
+            set((state) => ({
+              shares: state.shares.map((s) =>
+                s.id === tempId ? { ...s, id: dbShare.id } : s
+              ),
+            }))
+          }
         } catch (err: any) {
           console.error("Database insert error:", err)
-          set({ error: err.message || "Failed to add share", isLoading: false })
+          // Roll back on database error
+          set({ shares: originalShares, error: err.message || "Failed to add share" })
         }
       },
 
       updateShare: async (id, updatedFields) => {
-        const { user } = get()
+        const { user, shares } = get()
         if (!user) return
 
-        set({ isLoading: true, error: null })
+        const originalShares = [...shares]
+
+        // Optimistically update state
+        set((state) => ({
+          shares: state.shares.map((s) =>
+            s.id === id ? { ...s, ...updatedFields } : s
+          ),
+          error: null,
+        }))
+
         try {
-          // Map camelCase JS properties back to database columns
           const dbFields: any = {}
           if (updatedFields.ticker !== undefined) dbFields.ticker = updatedFields.ticker
           if (updatedFields.companyName !== undefined) dbFields.company_name = updatedFields.companyName
@@ -262,23 +303,25 @@ export const usePortfolioStore = create<PortfolioState>()(
             .eq("id", id)
 
           if (error) throw error
-
-          // Sync local state
-          set((state) => ({
-            shares: state.shares.map((s) => (s.id === id ? { ...s, ...updatedFields } : s)),
-            isLoading: false,
-          }))
         } catch (err: any) {
           console.error("Database update error:", err)
-          set({ error: err.message || "Failed to update share", isLoading: false })
+          // Roll back on error
+          set({ shares: originalShares, error: err.message || "Failed to update share" })
         }
       },
 
       deleteShare: async (id) => {
-        const { user } = get()
+        const { user, shares } = get()
         if (!user) return
 
-        set({ isLoading: true, error: null })
+        const originalShares = [...shares]
+
+        // Optimistically remove from state
+        set((state) => ({
+          shares: state.shares.filter((s) => s.id !== id),
+          error: null,
+        }))
+
         try {
           const { error } = await supabase
             .from("shares")
@@ -286,14 +329,10 @@ export const usePortfolioStore = create<PortfolioState>()(
             .eq("id", id)
 
           if (error) throw error
-
-          set((state) => ({
-            shares: state.shares.filter((s) => s.id !== id),
-            isLoading: false,
-          }))
         } catch (err: any) {
           console.error("Database delete error:", err)
-          set({ error: err.message || "Failed to delete share", isLoading: false })
+          // Roll back on error
+          set({ shares: originalShares, error: err.message || "Failed to delete share" })
         }
       },
 
@@ -304,6 +343,8 @@ export const usePortfolioStore = create<PortfolioState>()(
         set({ isLoading: true, error: null })
         try {
           const newAlerts: string[] = []
+          const failedTickers: string[] = []
+
           const updatedShares = await Promise.all(
             shares.map(async (share) => {
               try {
@@ -368,14 +409,19 @@ export const usePortfolioStore = create<PortfolioState>()(
                 return updated
               } catch (e) {
                 console.error(`Failed to refresh price for ${share.ticker}:`, e)
+                failedTickers.push(share.ticker)
                 return share
               }
             })
           )
+
           set((state) => ({
             shares: updatedShares,
             isLoading: false,
             triggeredAlerts: [...state.triggeredAlerts, ...newAlerts],
+            error: failedTickers.length > 0 
+              ? `Sync incomplete. Failed to refresh: ${failedTickers.join(", ")}` 
+              : null
           }))
         } catch (err: any) {
           console.error("Database sync refresh error:", err)

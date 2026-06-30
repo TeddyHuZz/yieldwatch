@@ -1,0 +1,17 @@
+{
+  "short_name": "YieldWatch",
+  "name": "YieldWatch Share & Dividend Tracker",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0a0a0a",
+  "theme_color": "#10b981",
+  "display": "standalone",
+  "orientation": "portrait"
+}

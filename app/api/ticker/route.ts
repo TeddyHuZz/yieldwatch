@@ -162,6 +162,10 @@ export async function GET(request: Request) {
       priceToBook,
       returnOnEquity,
       eps,
+    }, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600"
+      }
     })
   } catch (error: any) {
     console.error(`Yahoo Finance quote error for ${symbol}:`, error)
