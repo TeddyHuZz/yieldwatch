@@ -1,0 +1,17 @@
+name: Keep Supabase Active
+
+on:
+  schedule:
+    # Runs at 00:00 UTC every Monday and Thursday (every 3-4 days)
+    - cron: "0 0 * * 1,4"
+  workflow_dispatch: # Allows manual trigger in the GitHub Actions tab
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping YieldWatch API
+        run: |
+          # Pings your live ticker API to wake the next server and database
+          curl -s -f "https://shares-yieldwatch.vercel.app/api/ticker?symbol=AAPL" > /dev/null
+          echo "YieldWatch API pinged successfully. Database is active!"
