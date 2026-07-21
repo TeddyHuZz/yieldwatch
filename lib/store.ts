@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
-// Removed Supabase client import for local-only storage mode
+import { supabase } from "./supabase"
 
 export interface Share {
   id: string
@@ -73,10 +73,9 @@ export const usePortfolioStore = create<PortfolioState>()(
       checkUserSession: async () => {
         set({ isAuthLoading: true })
         try {
-          const stored = localStorage.getItem("yieldwatch_session_user")
-          if (stored) {
-            const sessionUser = JSON.parse(stored)
-            set({ user: sessionUser, isAuthLoading: false })
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            set({ user: session.user, isAuthLoading: false })
             await get().loadSharesFromDb()
           } else {
             set({ user: null, shares: [], isAuthLoading: false })
@@ -90,14 +89,9 @@ export const usePortfolioStore = create<PortfolioState>()(
       signIn: async (email, password) => {
         set({ isAuthLoading: true, error: null })
         try {
-          const accountsJson = localStorage.getItem("yieldwatch_local_accounts")
-          const accounts = accountsJson ? JSON.parse(accountsJson) : {}
-          if (!accounts[email] || accounts[email] !== password) {
-            throw new Error("Invalid email or password")
-          }
-          const sessionUser = { id: email, email }
-          localStorage.setItem("yieldwatch_session_user", JSON.stringify(sessionUser))
-          set({ user: sessionUser, isAuthLoading: false })
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+          if (error) throw error
+          set({ user: data.user, isAuthLoading: false })
           await get().loadSharesFromDb()
         } catch (err: any) {
           set({ error: err.message || "Failed to sign in", isAuthLoading: false })
@@ -108,16 +102,9 @@ export const usePortfolioStore = create<PortfolioState>()(
       signUp: async (email, password) => {
         set({ isAuthLoading: true, error: null })
         try {
-          const accountsJson = localStorage.getItem("yieldwatch_local_accounts")
-          const accounts = accountsJson ? JSON.parse(accountsJson) : {}
-          if (accounts[email]) {
-            throw new Error("Account already exists")
-          }
-          accounts[email] = password
-          localStorage.setItem("yieldwatch_local_accounts", JSON.stringify(accounts))
-          const sessionUser = { id: email, email }
-          localStorage.setItem("yieldwatch_session_user", JSON.stringify(sessionUser))
-          set({ user: sessionUser, isAuthLoading: false })
+          const { data, error } = await supabase.auth.signUp({ email, password })
+          if (error) throw error
+          set({ user: data.user, isAuthLoading: false })
           await get().loadSharesFromDb()
         } catch (err: any) {
           set({ error: err.message || "Failed to sign up", isAuthLoading: false })
@@ -128,11 +115,13 @@ export const usePortfolioStore = create<PortfolioState>()(
       signInWithGoogle: async () => {
         set({ isAuthLoading: true, error: null })
         try {
-          const email = "google-user@yieldwatch.local"
-          const sessionUser = { id: email, email }
-          localStorage.setItem("yieldwatch_session_user", JSON.stringify(sessionUser))
-          set({ user: sessionUser, isAuthLoading: false })
-          await get().loadSharesFromDb()
+          const { error } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: {
+              redirectTo: `${window.location.origin}/auth/callback`,
+            },
+          })
+          if (error) throw error
         } catch (err: any) {
           set({ error: err.message || "Google login failed", isAuthLoading: false })
           throw err
@@ -142,7 +131,8 @@ export const usePortfolioStore = create<PortfolioState>()(
       signOut: async () => {
         set({ isAuthLoading: true, error: null })
         try {
-          localStorage.removeItem("yieldwatch_session_user")
+          const { error } = await supabase.auth.signOut()
+          if (error) throw error
           set({ user: null, shares: [], isAuthLoading: false })
         } catch (err: any) {
           set({ error: err.message || "Failed to sign out", isAuthLoading: false })
@@ -155,11 +145,42 @@ export const usePortfolioStore = create<PortfolioState>()(
 
         set({ isLoading: true, error: null })
         try {
-          const storedShares = localStorage.getItem(`yieldwatch_shares_${user.id}`)
-          const shares: Share[] = storedShares ? JSON.parse(storedShares) : []
+          const { data, error } = await supabase
+            .from("shares")
+            .select("*")
+            .order("created_at", { ascending: true })
+
+          if (error) throw error
+
+          // Map snake_case columns from Postgres to camelCase properties in JS
+          const shares: Share[] = (data || []).map((row: any) => ({
+            id: row.id,
+            ticker: row.ticker,
+            companyName: row.company_name,
+            shares: Number(row.shares),
+            purchasePrice: Number(row.purchase_price),
+            currentPrice: Number(row.current_price || 0),
+            dividendYield: Number(row.dividend_yield || 0),
+            annualDividendPerShare: Number(row.annual_dividend_per_share || 0),
+            frequency: row.frequency,
+            payoutMonth: row.payout_month,
+            purchaseDate: row.purchase_date,
+            dayChange: row.day_change !== null ? Number(row.day_change) : undefined,
+            dayChangePercent: row.day_change_percent !== null ? Number(row.day_change_percent) : undefined,
+            volume: row.volume !== null ? Number(row.volume) : undefined,
+            exDividendDate: row.ex_dividend_date || undefined,
+            alertHigh: row.alert_high !== null ? Number(row.alert_high) : undefined,
+            alertLow: row.alert_low !== null ? Number(row.alert_low) : undefined,
+            peRatio: row.pe_ratio !== null ? Number(row.pe_ratio) : undefined,
+            priceToBook: row.price_to_book !== null ? Number(row.price_to_book) : undefined,
+            returnOnEquity: row.return_on_equity !== null ? Number(row.return_on_equity) : undefined,
+            eps: row.eps !== null ? Number(row.eps) : undefined,
+            lastUpdated: row.last_updated || undefined,
+          }))
+
           set({ shares, isLoading: false })
         } catch (err: any) {
-          console.error("Local storage load error:", err)
+          console.error("Database load error:", err)
           set({ error: err.message || "Failed to load shares", isLoading: false })
         }
       },
@@ -171,8 +192,10 @@ export const usePortfolioStore = create<PortfolioState>()(
           return
         }
 
-        const newShare: Share = {
-          id: `share-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        const originalShares = [...shares]
+        const tempId = `temp-${Date.now()}`
+        const optimisticShare: Share = {
+          id: tempId,
           ticker: share.ticker,
           companyName: share.companyName,
           shares: share.shares,
@@ -189,16 +212,50 @@ export const usePortfolioStore = create<PortfolioState>()(
           priceToBook: share.priceToBook,
           returnOnEquity: share.returnOnEquity,
           eps: share.eps,
-          lastUpdated: new Date().toISOString(),
         }
 
-        const updatedShares = [...shares, newShare]
+        // Optimistically add to state
+        set({ shares: [...originalShares, optimisticShare], error: null })
+
         try {
-          localStorage.setItem(`yieldwatch_shares_${user.id}`, JSON.stringify(updatedShares))
-          set({ shares: updatedShares, error: null })
+          const { data, error } = await supabase
+            .from("shares")
+            .insert([{
+              user_id: user.id,
+              ticker: share.ticker,
+              company_name: share.companyName,
+              shares: share.shares,
+              purchase_price: share.purchasePrice,
+              current_price: share.purchasePrice,
+              dividend_yield: share.dividendYield,
+              annual_dividend_per_share: share.annualDividendPerShare,
+              frequency: share.frequency,
+              payout_month: share.payoutMonth,
+              purchase_date: share.purchaseDate,
+              alert_high: share.alertHigh !== undefined ? share.alertHigh : null,
+              alert_low: share.alertLow !== undefined ? share.alertLow : null,
+              pe_ratio: share.peRatio !== undefined ? share.peRatio : null,
+              price_to_book: share.priceToBook !== undefined ? share.priceToBook : null,
+              return_on_equity: share.returnOnEquity !== undefined ? share.returnOnEquity : null,
+              eps: share.eps !== undefined ? share.eps : null,
+            }])
+            .select()
+
+          if (error) throw error
+
+          // Swap temp ID with real DB ID
+          if (data && data[0]) {
+            const dbShare = data[0]
+            set((state) => ({
+              shares: state.shares.map((s) =>
+                s.id === tempId ? { ...s, id: dbShare.id } : s
+              ),
+            }))
+          }
         } catch (err: any) {
-          console.error("Local storage insert error:", err)
-          set({ error: err.message || "Failed to add share" })
+          console.error("Database insert error:", err)
+          // Roll back on database error
+          set({ shares: originalShares, error: err.message || "Failed to add share" })
         }
       },
 
@@ -206,16 +263,50 @@ export const usePortfolioStore = create<PortfolioState>()(
         const { user, shares } = get()
         if (!user) return
 
-        const updatedShares = shares.map((s) =>
-          s.id === id ? { ...s, ...updatedFields } : s
-        )
+        const originalShares = [...shares]
+
+        // Optimistically update state
+        set((state) => ({
+          shares: state.shares.map((s) =>
+            s.id === id ? { ...s, ...updatedFields } : s
+          ),
+          error: null,
+        }))
 
         try {
-          localStorage.setItem(`yieldwatch_shares_${user.id}`, JSON.stringify(updatedShares))
-          set({ shares: updatedShares, error: null })
+          const dbFields: any = {}
+          if (updatedFields.ticker !== undefined) dbFields.ticker = updatedFields.ticker
+          if (updatedFields.companyName !== undefined) dbFields.company_name = updatedFields.companyName
+          if (updatedFields.shares !== undefined) dbFields.shares = updatedFields.shares
+          if (updatedFields.purchasePrice !== undefined) dbFields.purchase_price = updatedFields.purchasePrice
+          if (updatedFields.currentPrice !== undefined) dbFields.current_price = updatedFields.currentPrice
+          if (updatedFields.dividendYield !== undefined) dbFields.dividend_yield = updatedFields.dividendYield
+          if (updatedFields.annualDividendPerShare !== undefined) dbFields.annual_dividend_per_share = updatedFields.annualDividendPerShare
+          if (updatedFields.frequency !== undefined) dbFields.frequency = updatedFields.frequency
+          if (updatedFields.payoutMonth !== undefined) dbFields.payout_month = updatedFields.payoutMonth
+          if (updatedFields.purchaseDate !== undefined) dbFields.purchase_date = updatedFields.purchaseDate
+          if (updatedFields.dayChange !== undefined) dbFields.day_change = updatedFields.dayChange
+          if (updatedFields.dayChangePercent !== undefined) dbFields.day_change_percent = updatedFields.dayChangePercent
+          if (updatedFields.volume !== undefined) dbFields.volume = updatedFields.volume
+          if (updatedFields.exDividendDate !== undefined) dbFields.ex_dividend_date = updatedFields.exDividendDate
+          if (updatedFields.alertHigh !== undefined) dbFields.alert_high = updatedFields.alertHigh
+          if (updatedFields.alertLow !== undefined) dbFields.alert_low = updatedFields.alertLow
+          if (updatedFields.peRatio !== undefined) dbFields.pe_ratio = updatedFields.peRatio
+          if (updatedFields.priceToBook !== undefined) dbFields.price_to_book = updatedFields.priceToBook
+          if (updatedFields.returnOnEquity !== undefined) dbFields.return_on_equity = updatedFields.returnOnEquity
+          if (updatedFields.eps !== undefined) dbFields.eps = updatedFields.eps
+          if (updatedFields.lastUpdated !== undefined) dbFields.last_updated = updatedFields.lastUpdated
+
+          const { error } = await supabase
+            .from("shares")
+            .update(dbFields)
+            .eq("id", id)
+
+          if (error) throw error
         } catch (err: any) {
-          console.error("Local storage update error:", err)
-          set({ error: err.message || "Failed to update share" })
+          console.error("Database update error:", err)
+          // Roll back on error
+          set({ shares: originalShares, error: err.message || "Failed to update share" })
         }
       },
 
@@ -223,14 +314,25 @@ export const usePortfolioStore = create<PortfolioState>()(
         const { user, shares } = get()
         if (!user) return
 
-        const updatedShares = shares.filter((s) => s.id !== id)
+        const originalShares = [...shares]
+
+        // Optimistically remove from state
+        set((state) => ({
+          shares: state.shares.filter((s) => s.id !== id),
+          error: null,
+        }))
 
         try {
-          localStorage.setItem(`yieldwatch_shares_${user.id}`, JSON.stringify(updatedShares))
-          set({ shares: updatedShares, error: null })
+          const { error } = await supabase
+            .from("shares")
+            .delete()
+            .eq("id", id)
+
+          if (error) throw error
         } catch (err: any) {
-          console.error("Local storage delete error:", err)
-          set({ error: err.message || "Failed to delete share" })
+          console.error("Database delete error:", err)
+          // Roll back on error
+          set({ shares: originalShares, error: err.message || "Failed to delete share" })
         }
       },
 
@@ -265,7 +367,7 @@ export const usePortfolioStore = create<PortfolioState>()(
                   )
                 }
 
-                return {
+                const updated = {
                   ...share,
                   currentPrice,
                   companyName: data.companyName || share.companyName,
@@ -282,6 +384,29 @@ export const usePortfolioStore = create<PortfolioState>()(
                   eps: typeof data.eps === "number" ? data.eps : share.eps,
                   lastUpdated: new Date().toISOString(),
                 }
+
+                // Sync refreshed quotes back to Supabase
+                await supabase
+                  .from("shares")
+                  .update({
+                    current_price: updated.currentPrice,
+                    company_name: updated.companyName,
+                    dividend_yield: updated.dividendYield,
+                    annual_dividend_per_share: updated.annualDividendPerShare,
+                    frequency: updated.frequency,
+                    day_change: updated.dayChange,
+                    day_change_percent: updated.dayChangePercent,
+                    volume: updated.volume,
+                    ex_dividend_date: updated.exDividendDate,
+                    pe_ratio: updated.peRatio,
+                    price_to_book: updated.priceToBook,
+                    return_on_equity: updated.returnOnEquity,
+                    eps: updated.eps,
+                    last_updated: updated.lastUpdated,
+                  })
+                  .eq("id", share.id)
+
+                return updated
               } catch (e) {
                 console.error(`Failed to refresh price for ${share.ticker}:`, e)
                 failedTickers.push(share.ticker)
@@ -289,9 +414,6 @@ export const usePortfolioStore = create<PortfolioState>()(
               }
             })
           )
-
-          // Save updated shares to local storage
-          localStorage.setItem(`yieldwatch_shares_${user.id}`, JSON.stringify(updatedShares))
 
           set((state) => ({
             shares: updatedShares,
@@ -302,7 +424,7 @@ export const usePortfolioStore = create<PortfolioState>()(
               : null
           }))
         } catch (err: any) {
-          console.error("Local storage refresh error:", err)
+          console.error("Database sync refresh error:", err)
           set({ error: err.message || "Failed to refresh prices", isLoading: false })
         }
       },

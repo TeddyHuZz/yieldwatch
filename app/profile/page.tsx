@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react"
 import { usePortfolioStore } from "@/lib/store"
-// Removed Supabase import for offline mode
+import { supabase } from "@/lib/supabase"
 import { AuthScreen } from "@/components/auth-screen"
 import { Button } from "@/components/ui/button"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
@@ -73,15 +73,24 @@ export default function ProfilePage() {
     }
   }
 
-  // Load dividend logs from localStorage
+  // Load dividend logs from Supabase
   const loadLogs = useCallback(async () => {
     if (!user) return
     try {
-      const stored = localStorage.getItem(`yieldwatch_dividend_history_${user.id}`)
-      const rawLogs = stored ? JSON.parse(stored) : []
-      // Sort payout_date descending
-      const sortedLogs = rawLogs.sort((a: any, b: any) => new Date(b.payout_date).getTime() - new Date(a.payout_date).getTime())
-      setLogs(sortedLogs)
+      const { data, error } = await supabase
+        .from("dividend_history")
+        .select("*")
+        .order("payout_date", { ascending: false })
+
+      if (error) throw error
+      setLogs(
+        (data || []).map((row: any) => ({
+          id: row.id,
+          ticker: row.ticker,
+          amount: Number(row.amount),
+          payout_date: row.payout_date,
+        }))
+      )
     } catch (err) {
       console.error("Failed to load dividend payout history:", err)
     }
@@ -105,16 +114,16 @@ export default function ProfilePage() {
 
     setLogLoading(true)
     try {
-      const stored = localStorage.getItem(`yieldwatch_dividend_history_${user.id}`)
-      const currentLogs = stored ? JSON.parse(stored) : []
-      const newLog = {
-        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        ticker: logTicker.toUpperCase(),
-        amount: Number(logAmount),
-        payout_date: logDate,
-      }
-      const updatedLogs = [...currentLogs, newLog]
-      localStorage.setItem(`yieldwatch_dividend_history_${user.id}`, JSON.stringify(updatedLogs))
+      const { error } = await supabase.from("dividend_history").insert([
+        {
+          user_id: user.id,
+          ticker: logTicker,
+          amount: Number(logAmount),
+          payout_date: logDate,
+        },
+      ])
+
+      if (error) throw error
 
       setLogAmount("")
       await loadLogs()
@@ -128,10 +137,8 @@ export default function ProfilePage() {
   const handleDeleteLog = async (id: string) => {
     if (!confirm("Are you sure you want to delete this payout log?")) return
     try {
-      const stored = localStorage.getItem(`yieldwatch_dividend_history_${user.id}`)
-      const currentLogs = stored ? JSON.parse(stored) : []
-      const updatedLogs = currentLogs.filter((log: any) => log.id !== id)
-      localStorage.setItem(`yieldwatch_dividend_history_${user.id}`, JSON.stringify(updatedLogs))
+      const { error } = await supabase.from("dividend_history").delete().eq("id", id)
+      if (error) throw error
       await loadLogs()
     } catch (err) {
       console.error("Failed to delete log:", err)
