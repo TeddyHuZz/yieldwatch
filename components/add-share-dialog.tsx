@@ -155,6 +155,9 @@ export function AddShareDialog({ isOpen, onOpenChange, editShareId }: AddShareDi
       setDividendYield(Number(data.dividendYield.toFixed(2)))
       setAnnualDividendPerShare(Number(data.annualDividendPerShare.toFixed(4)))
       setFrequency(data.frequency)
+      if (typeof data.payoutMonth === "number") {
+        setPayoutMonth(data.payoutMonth)
+      }
       
       // Auto-set the buy price based on historical price lookup
       setPurchasePrice(data.purchasePrice)

@@ -39,10 +39,11 @@ export async function GET(request: Request) {
     let returnOnEquity = 0
     let eps = quoteResult.trailingEps || 0
 
+    let summary: any = null
     try {
       // Try quoteSummary for deep dividend detail modules
-      const summary = (await yahooFinance.quoteSummary(symbolUpper, {
-        modules: ["summaryDetail", "price", "defaultKeyStatistics", "financialData"],
+      summary = (await yahooFinance.quoteSummary(symbolUpper, {
+        modules: ["summaryDetail", "price", "defaultKeyStatistics", "financialData", "calendarEvents"],
       })) as any
 
       if (summary) {
@@ -95,6 +96,22 @@ export async function GET(request: Request) {
       console.warn(`Failed to fetch quoteSummary details for ${symbolUpper}, using basic quote:`, e)
       dividendYield = quoteResult.trailingAnnualDividendYield ? quoteResult.trailingAnnualDividendYield * 100 : 0
       annualDividendPerShare = quoteResult.trailingAnnualDividendRate || 0
+    }
+
+    // Determine the payoutMonth based on the actual dividend date or ex-dividend date from Yahoo Finance
+    let payoutMonth = 0 // default January
+    if (summary) {
+      if (summary.calendarEvents?.dividendDate) {
+        const pDate = new Date(summary.calendarEvents.dividendDate)
+        if (!isNaN(pDate.getTime())) {
+          payoutMonth = pDate.getMonth()
+        }
+      } else if (exDividendDate) {
+        const exDate = new Date(exDividendDate)
+        if (!isNaN(exDate.getTime())) {
+          payoutMonth = exDate.getMonth()
+        }
+      }
     }
 
     // Default frequency to quarterly, unless it is a known monthly stock
@@ -154,6 +171,7 @@ export async function GET(request: Request) {
       dividendYield,
       annualDividendPerShare,
       frequency,
+      payoutMonth,
       dayChange,
       dayChangePercent,
       volume,
