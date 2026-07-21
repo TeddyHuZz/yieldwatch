@@ -3,6 +3,49 @@ import YahooFinance from "yahoo-finance2"
 
 const yahooFinance = new YahooFinance()
 
+async function getDividendFrequency(symbol: string): Promise<string> {
+  try {
+    const end = new Date()
+    const start = new Date()
+    start.setFullYear(end.getFullYear() - 2) // 2 years back
+
+    const period1 = start.toISOString().split("T")[0]
+    const period2 = end.toISOString().split("T")[0]
+
+    const dividends = await yahooFinance.historical(symbol, {
+      period1,
+      period2,
+      events: "dividends",
+    }) as any[]
+
+    if (!dividends || dividends.length === 0) {
+      return "quarterly" // default fallback
+    }
+
+    // Filter out very small special dividends / adjustments (e.g. less than 20% of average dividend)
+    const values = dividends.map(d => d.dividends)
+    const avgDividend = values.reduce((sum, v) => sum + v, 0) / values.length
+    const mainDividends = dividends.filter(d => d.dividends >= avgDividend * 0.2)
+
+    const count = mainDividends.length
+    // Average payouts per year
+    const payoutsPerYear = count / 2
+
+    if (payoutsPerYear > 8) {
+      return "monthly"
+    } else if (payoutsPerYear > 2.5) {
+      return "quarterly"
+    } else if (payoutsPerYear > 1.2) {
+      return "semi-annually"
+    } else {
+      return "annually"
+    }
+  } catch (e) {
+    console.warn(`Failed to fetch historical dividends for ${symbol}:`, e)
+    return "quarterly" // fallback
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const symbol = searchParams.get("symbol")
@@ -114,12 +157,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // Default frequency to quarterly, unless it is a known monthly stock
-    let frequency = "quarterly"
-    const monthlyTickers = ["O", "MAIN", "STAG", "AGNC", "PSEC", "LTC", "EPR", "JEPI", "JEPQ", "SRET"]
-    if (monthlyTickers.includes(symbolUpper)) {
-      frequency = "monthly"
-    }
+    // Fetch and calculate the actual dividend payout frequency dynamically
+    const frequency = await getDividendFrequency(symbolUpper)
 
     // Try to get historical price if purchaseDate is provided
     const purchaseDate = searchParams.get("purchaseDate")
