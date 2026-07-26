@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react"
 import { usePortfolioStore } from "@/lib/store"
+import { SUPPORTED_MARKETS, getTickerMarket, detectUserLocationMarket } from "@/lib/markets"
 import { AuthScreen } from "@/components/auth-screen"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +19,9 @@ import {
   FolderUser,
   Globe,
   Star,
+  Compass,
+  Buildings,
+  MapPin,
 } from "@phosphor-icons/react"
 
 interface AnalysisData {
@@ -38,7 +42,7 @@ interface AnalysisData {
   isError?: boolean
 }
 
-// Curated high-yield watchlist tickers to help users scan opportunities
+// Curated high-yield watchlist tickers to help users scan opportunities across markets
 const DEFAULT_WATCHLIST = [
   "O",       // Realty Income (US REIT)
   "PG",      // Procter & Gamble (US Consumer)
@@ -46,8 +50,12 @@ const DEFAULT_WATCHLIST = [
   "JNJ",     // Johnson & Johnson (US Healthcare)
   "SCHD",    // Schwab US Dividend ETF
   "1155.KL", // Maybank (Malaysian Bank)
+  "1023.KL", // CIMB Group (Malaysian Bank)
+  "5212.KL", // Dish Tech / PChem (Malaysian Dividend)
   "D05.SI",  // DBS Group (Singapore Bank)
+  "U11.SI",  // UOB Bank (Singapore Bank)
   "C38U.SI", // CapitaLand Integrated Commercial REIT (Singapore REIT)
+  "0005.HK", // HSBC Holdings (Hong Kong)
 ]
 
 export default function InsightsPage() {
@@ -61,21 +69,60 @@ export default function InsightsPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   
-  // Filter settings
+  // Market scope & filter settings
+  const [marketScope, setMarketScope] = useState<"ALL" | "ORIGIN" | "INTERNATIONAL">("ALL")
   const [filterType, setFilterType] = useState<"ALL" | "BULLISH" | "BEARISH" | "SAFE">("ALL")
+
+  // IP Geo-location state
+  const [isDetectingGeo, setIsDetectingGeo] = useState(false)
+  const [geoNotice, setGeoNotice] = useState<string | null>(null)
 
   const {
     user,
     isAuthLoading,
     shares,
     currency,
+    originMarket,
+    setOriginMarket,
     checkUserSession,
   } = usePortfolioStore()
+
+  const currentOriginConfig = SUPPORTED_MARKETS.find((m) => m.id === originMarket) || SUPPORTED_MARKETS[2]
 
   useEffect(() => {
     setMounted(true)
     checkUserSession()
   }, [checkUserSession])
+
+  // Auto-detect user location on session initialization
+  useEffect(() => {
+    if (mounted && user) {
+      detectUserLocationMarket().then((geo) => {
+        if (geo.market) {
+          setOriginMarket(geo.market)
+        }
+      })
+    }
+  }, [mounted, user, setOriginMarket])
+
+  const handleAutoDetectGeo = async () => {
+    setIsDetectingGeo(true)
+    setGeoNotice(null)
+    try {
+      const geo = await detectUserLocationMarket()
+      setOriginMarket(geo.market)
+      const match = SUPPORTED_MARKETS.find((m) => m.id === geo.market)
+      if (match) {
+        setGeoNotice(`Auto-detected: ${match.flag} ${match.country}`)
+        setTimeout(() => setGeoNotice(null), 3500)
+      }
+    } catch {
+      setGeoNotice("Location detection unavailable")
+      setTimeout(() => setGeoNotice(null), 3000)
+    } finally {
+      setIsDetectingGeo(false)
+    }
+  }
 
   // Core single-ticker analysis fetcher
   const fetchSingleAnalysis = async (symbol: string): Promise<AnalysisData | null> => {
@@ -248,9 +295,17 @@ export default function InsightsPage() {
     }
   }
 
-  // Filter batch list based on active screening tab
+  // Filter batch list based on active market scope & fundamental screening tab
   const filteredData = batchData.filter((item) => {
     if (item.isLoading) return true // Keep loading cards visible
+
+    // 1. Market Scope Filter (Origin Country Market vs International Market)
+    const itemMarket = getTickerMarket(item.ticker)
+    const isOrigin = itemMarket.id === originMarket
+    if (marketScope === "ORIGIN" && !isOrigin) return false
+    if (marketScope === "INTERNATIONAL" && isOrigin) return false
+
+    // 2. Fundamental Screener Filter
     if (filterType === "BULLISH") return item.trend === "Bullish"
     if (filterType === "BEARISH") return item.trend === "Bearish"
     if (filterType === "SAFE") return item.safetyGrade === "Safe"
@@ -278,9 +333,17 @@ export default function InsightsPage() {
     return { label: "High Risk / Avoid", style: "bg-destructive/10 text-destructive border-destructive/20" }
   }
 
-  // Calculate the TOP 3 stocks currently perfect for beginners (Safe + Bullish, sorted by highest safety score)
+  // Calculate TOP 3 stocks for beginners matching active market scope
   const topBeginnerPicks = batchData
-    .filter((item) => !item.isLoading && !item.isError && item.safetyGrade === "Safe" && item.trend === "Bullish")
+    .filter((item) => {
+      if (item.isLoading || item.isError || item.safetyGrade !== "Safe" || item.trend !== "Bullish") {
+        return false
+      }
+      const isOrigin = getTickerMarket(item.ticker).id === originMarket
+      if (marketScope === "ORIGIN" && !isOrigin) return false
+      if (marketScope === "INTERNATIONAL" && isOrigin) return false
+      return true
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
 
@@ -319,6 +382,8 @@ export default function InsightsPage() {
 
     const cardGradeStyle = getGradeColor(item.safetyGrade)
     const suitability = getSuitability(item)
+    const marketInfo = getTickerMarket(item.ticker)
+    const isOriginAsset = marketInfo.id === originMarket
 
     return (
       <button
@@ -330,11 +395,25 @@ export default function InsightsPage() {
             : "border-border/70"
         }`}
       >
-        <div className="flex items-center justify-between w-full">
-          <span className="font-mono font-bold text-xs bg-muted border border-border/40 px-1.5 py-0.5 rounded leading-none">
-            {item.ticker}
-          </span>
-          <span className="text-[9px] font-mono text-muted-foreground">
+        <div className="flex items-center justify-between w-full gap-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-mono font-bold text-xs bg-muted border border-border/40 px-1.5 py-0.5 rounded leading-none shrink-0">
+              {item.ticker}
+            </span>
+            <span
+              className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border flex items-center gap-0.5 shrink-0 ${
+                isOriginAsset
+                  ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                  : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+              }`}
+              title={isOriginAsset ? `${marketInfo.country} (Origin Country Market)` : `${marketInfo.country} (International Market)`}
+            >
+              <span>{marketInfo.flag}</span>
+              <span>{isOriginAsset ? "ORIGIN" : "INTL"}</span>
+            </span>
+          </div>
+
+          <span className="text-[9px] font-mono text-muted-foreground shrink-0">
             Yield: <span className="font-bold text-foreground">{item.dividendYield.toFixed(1)}%</span>
           </span>
         </div>
@@ -369,68 +448,166 @@ export default function InsightsPage() {
     <div className="flex flex-col flex-1 bg-background text-foreground min-h-screen font-sans antialiased selection:bg-foreground/10 py-6">
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 space-y-6">
         
-        {/* Navigation & Title Divider */}
-        <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-4 select-none">
+        {/* Title Header */}
+        <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-2 select-none">
           <div className="flex flex-col gap-0.5">
             <h2 className="text-base font-bold tracking-tight text-foreground uppercase flex items-center gap-2">
-              <ChartLineUp className="w-4 h-4 text-emerald-500" /> Dividend Screener & Watchlist
+              <ChartLineUp className="w-4 h-4 text-emerald-500" /> Dividend Screener & Insights
             </h2>
             <p className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">
-              Scan macro trends, safety ratings, and watch lists to filter buy opportunities
+              Filter yield opportunities by home market vs international market and safety parameters
             </p>
           </div>
         </div>
 
-        {/* TOP PICKS FOR BEGINNERS (Dynamic highlight widget) */}
+        {/* MARKET SCOPE SELECTOR BAR (Origin Country vs International Market) */}
+        <div className="bg-card border border-border/70 p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs select-none">
+          {/* Market Focus Selector Tabs */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-mono text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-1.5 mr-1">
+              <Compass className="w-3.5 h-3.5 text-emerald-500" /> Market Focus:
+            </span>
+
+            <button
+              onClick={() => setMarketScope("ALL")}
+              className={`px-3 py-1.5 rounded-xl border text-[10px] font-mono font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                marketScope === "ALL"
+                  ? "bg-foreground text-background border-foreground shadow-xs font-black"
+                  : "border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" /> All Markets
+            </button>
+
+            <button
+              onClick={() => setMarketScope("ORIGIN")}
+              className={`px-3 py-1.5 rounded-xl border text-[10px] font-mono font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                marketScope === "ORIGIN"
+                  ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/40 shadow-xs font-black"
+                  : "border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              }`}
+            >
+              <span>{currentOriginConfig.flag}</span>
+              <span>{currentOriginConfig.country} Market (Origin)</span>
+            </button>
+
+            <button
+              onClick={() => setMarketScope("INTERNATIONAL")}
+              className={`px-3 py-1.5 rounded-xl border text-[10px] font-mono font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                marketScope === "INTERNATIONAL"
+                  ? "bg-blue-500/15 text-blue-400 border-blue-500/40 shadow-xs font-black"
+                  : "border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-blue-400" /> International Market
+            </button>
+          </div>
+
+          {/* Origin Country Preference Selector & Auto-Detect */}
+          <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 pt-2.5 md:pt-0 border-border/30 w-full md:w-auto justify-between md:justify-end">
+            <span className="text-[9px] font-mono uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1">
+              <Buildings className="w-3 h-3" /> Origin Country:
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <select
+                  value={originMarket}
+                  onChange={(e) => setOriginMarket(e.target.value)}
+                  className="bg-muted/40 border border-border/80 rounded-lg py-1 px-2.5 text-xs font-mono font-bold text-foreground focus:outline-none focus:border-emerald-500/50 cursor-pointer appearance-none pr-6"
+                >
+                  {SUPPORTED_MARKETS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.flag} {m.country} ({m.currency})
+                    </option>
+                  ))}
+                </select>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] pointer-events-none text-muted-foreground">▼</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAutoDetectGeo}
+                disabled={isDetectingGeo}
+                title="Detect home market using IP location"
+                className="px-2 py-1 bg-muted/30 hover:bg-muted border border-border/70 rounded-lg text-[9px] font-mono font-bold uppercase text-emerald-500 hover:text-emerald-400 transition-colors flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+              >
+                <MapPin className={`w-3 h-3 ${isDetectingGeo ? "animate-bounce text-amber-500" : ""}`} />
+                <span>{isDetectingGeo ? "Locating..." : "Auto IP"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* IP Geo Notification Toast */}
+        {geoNotice && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] px-3 py-1.5 rounded-xl font-mono flex items-center gap-1.5 w-fit animate-in fade-in duration-200 select-none">
+            <MapPin className="w-3.5 h-3.5" />
+            <span>{geoNotice}</span>
+          </div>
+        )}
+
+        {/* TOP PICKS FOR BEGINNERS (Dynamic highlight widget filtered by market scope) */}
         {!batchLoading && topBeginnerPicks.length > 0 && (
-          <div className="bg-emerald-500/5 border border-emerald-500/20 p-5 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="flex items-center gap-2">
-              <Star className="w-4 h-4 text-emerald-500" weight="fill" />
-              <h3 className="text-xs font-bold text-emerald-500 uppercase tracking-wider font-sans">
-                Top Picks for Long-Term Dividend Beginners
-              </h3>
+          <div className="bg-emerald-500/5 border border-emerald-500/20 p-5 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-4 duration-500 select-none">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-emerald-500" weight="fill" />
+                <h3 className="text-xs font-bold text-emerald-500 uppercase tracking-wider font-sans">
+                  Top Picks for Dividend Beginners {marketScope === "ORIGIN" ? `(${currentOriginConfig.country} Origin)` : marketScope === "INTERNATIONAL" ? "(International)" : ""}
+                </h3>
+              </div>
+              <span className="text-[9px] font-mono font-bold text-emerald-500/80 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                {topBeginnerPicks.length} Selected
+              </span>
             </div>
             <p className="text-[10px] text-muted-foreground font-mono leading-relaxed max-w-2xl">
-              These assets are currently scored as **Safe** (low risk, healthy payouts) and are in a **Bullish** uptrend. They represent the most stable, buy-and-hold entry points right now.
+              These assets are scored as **Safe** with healthy payouts in a **Bullish** uptrend within the selected market focus.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              {topBeginnerPicks.map((pick) => (
-                <button
-                  key={pick.ticker}
-                  onClick={() => setActiveTicker(pick.ticker)}
-                  className={`flex items-center justify-between p-3.5 bg-card/60 hover:bg-card border rounded-xl text-left cursor-pointer transition-all duration-300 ${
-                    activeTicker === pick.ticker ? "border-emerald-500 ring-1 ring-emerald-500/20" : "border-emerald-500/20"
-                  }`}
-                >
-                  <div className="flex flex-col gap-1">
-                    <span className="font-mono font-bold text-xs bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded w-fit border border-emerald-500/20">
-                      {pick.ticker}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground font-bold truncate max-w-[120px]">
-                      {pick.companyName}
-                    </span>
-                  </div>
-                  <div className="text-right flex flex-col gap-0.5">
-                    <span className="text-[10px] font-mono font-bold text-foreground">
-                      Yield: {pick.dividendYield.toFixed(2)}%
-                    </span>
-                    <span className="text-[8px] font-mono font-bold text-emerald-500">
-                      Score: {pick.score}/100
-                    </span>
-                  </div>
-                </button>
-              ))}
+              {topBeginnerPicks.map((pick) => {
+                const pickMarket = getTickerMarket(pick.ticker)
+                return (
+                  <button
+                    key={pick.ticker}
+                    onClick={() => setActiveTicker(pick.ticker)}
+                    className={`flex items-center justify-between p-3.5 bg-card/60 hover:bg-card border rounded-xl text-left cursor-pointer transition-all duration-300 ${
+                      activeTicker === pick.ticker ? "border-emerald-500 ring-1 ring-emerald-500/20" : "border-emerald-500/20"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-xs bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                          {pick.ticker}
+                        </span>
+                        <span className="text-[8px] font-mono">{pickMarket.flag}</span>
+                      </div>
+                      <span className="text-[9px] text-muted-foreground font-bold truncate max-w-[120px]">
+                        {pick.companyName}
+                      </span>
+                    </div>
+                    <div className="text-right flex flex-col gap-0.5">
+                      <span className="text-[10px] font-mono font-bold text-foreground">
+                        Yield: {pick.dividendYield.toFixed(2)}%
+                      </span>
+                      <span className="text-[8px] font-mono font-bold text-emerald-500">
+                        Score: {pick.score}/100
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
 
-        {/* Directory Filters & Search Bar */}
+        {/* Directory Filters & Quick Search Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/25 pb-4 select-none">
-          {/* Sizing Filters */}
+          {/* Fundamental Sizing Filters */}
           <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono font-bold uppercase">
             <span className="text-muted-foreground mr-1.5 flex items-center gap-1">
-              <Funnel className="w-3.5 h-3.5" /> Filters:
+              <Funnel className="w-3.5 h-3.5" /> Trend Filter:
             </span>
             <button
               onClick={() => setFilterType("ALL")}
@@ -506,10 +683,22 @@ export default function InsightsPage() {
           </div>
         )}
 
-        {/* Summary Directory Grid */}
+        {/* Directory Grid Sections */}
         {batchData.length > 0 && (
           <div className="space-y-6">
             
+            {/* Empty State when zero items match active market & filter combo */}
+            {filteredData.length === 0 && !batchLoading && (
+              <div className="p-8 text-center bg-card/30 border border-dashed border-border/60 rounded-2xl space-y-2 select-none">
+                <p className="text-xs font-mono text-muted-foreground font-bold">
+                  No dividend assets found matching {marketScope === "ORIGIN" ? `${currentOriginConfig.country} (Origin Market)` : marketScope === "INTERNATIONAL" ? "International Market" : "current filters"}.
+                </p>
+                <p className="text-[10px] font-mono text-muted-foreground/70">
+                  Try searching for a ticker above or switching market focus.
+                </p>
+              </div>
+            )}
+
             {/* My Portfolio Holdings */}
             {holdingsItems.length > 0 && (
               <div className="space-y-2 select-none animate-in fade-in duration-350">
@@ -523,7 +712,7 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {/* Curated Global Ideas Watchlist */}
+            {/* Curated Ideas Watchlist */}
             {watchlistItems.length > 0 && (
               <div className="space-y-2 select-none animate-in fade-in duration-350 pt-2">
                 <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -557,12 +746,28 @@ export default function InsightsPage() {
                 ) : (
                   <>
                     {/* Header Info */}
-                    <div className="flex flex-col gap-0.5 bg-muted/30 border border-border/40 p-4 rounded-xl">
-                      <span className="text-[8px] font-mono text-muted-foreground uppercase font-bold tracking-wider">Currently Inspecting:</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-mono font-bold text-base text-foreground bg-muted border border-border/50 px-2 py-0.5 rounded leading-none">{activeAnalysis.ticker}</span>
-                        <span className="text-xs font-bold text-foreground truncate">{activeAnalysis.companyName}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/30 border border-border/40 p-4 rounded-xl">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[8px] font-mono text-muted-foreground uppercase font-bold tracking-wider">Currently Inspecting:</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-mono font-bold text-base text-foreground bg-muted border border-border/50 px-2 py-0.5 rounded leading-none">{activeAnalysis.ticker}</span>
+                          <span className="text-xs font-bold text-foreground truncate">{activeAnalysis.companyName}</span>
+                        </div>
                       </div>
+
+                      {(() => {
+                        const activeMarket = getTickerMarket(activeAnalysis.ticker)
+                        const isOrigin = activeMarket.id === originMarket
+                        return (
+                          <div className={`px-2.5 py-1 rounded-lg border text-[10px] font-mono font-bold uppercase flex items-center gap-1.5 self-start sm:self-auto ${
+                            isOrigin ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                          }`}>
+                            <span>{activeMarket.flag}</span>
+                            <span>{activeMarket.country}</span>
+                            <span>({isOrigin ? "Origin Country Market" : "International Market"})</span>
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     {/* Dashboard layout details */}
@@ -798,10 +1003,10 @@ export default function InsightsPage() {
                         </div>
 
                       </div>
-
                     </div>
                   </>
                 )}
+
               </div>
             ) : null}
 

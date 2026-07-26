@@ -22,6 +22,8 @@ import {
   HandCoins,
 } from "@phosphor-icons/react"
 
+import { SUPPORTED_MARKETS } from "@/lib/markets"
+
 interface DividendLog {
   id: string
   ticker: string
@@ -49,6 +51,8 @@ export default function ProfilePage() {
     shares,
     currency,
     setCurrency,
+    originMarket,
+    setOriginMarket,
     checkUserSession,
     signOut,
   } = usePortfolioStore()
@@ -104,6 +108,12 @@ export default function ProfilePage() {
 
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCurrency(e.target.value)
+    setSaveSuccess(true)
+    setTimeout(() => setSaveSuccess(false), 2000)
+  }
+
+  const handleOriginMarketChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setOriginMarket(e.target.value)
     setSaveSuccess(true)
     setTimeout(() => setSaveSuccess(false), 2000)
   }
@@ -377,6 +387,38 @@ export default function ProfilePage() {
                       </div>
                       <p className="text-[9px] text-muted-foreground leading-relaxed pt-1 font-mono">
                         Sets currency formatting globally across dashboard calculations, summaries, and monthly dividend cashflow charts.
+                      </p>
+                    </div>
+
+                    {/* Origin Country Market Preference */}
+                    <div className="space-y-2 pt-5 border-t border-border/30">
+                      <label className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider block">
+                        Origin Country Market (Home Market)
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-full max-w-65">
+                          <select
+                            value={originMarket}
+                            onChange={handleOriginMarketChange}
+                            className="w-full bg-muted/40 border border-border/80 rounded-lg py-2 px-3 text-xs font-mono font-bold text-foreground focus:outline-none focus:border-foreground/45 appearance-none cursor-pointer"
+                          >
+                            {SUPPORTED_MARKETS.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.flag} {m.country} ({m.currency})
+                              </option>
+                            ))}
+                          </select>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] pointer-events-none text-muted-foreground">▼</span>
+                        </div>
+
+                        {saveSuccess && (
+                          <span className="text-[9px] font-mono text-emerald-500 font-bold flex items-center gap-1 transition-all animate-in fade-in duration-200">
+                            <ShieldCheck className="w-4 h-4" /> Preferences Saved
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[9px] text-muted-foreground leading-relaxed pt-1 font-mono">
+                        Configures your primary home market for dividend insights, screening filters, and local vs international asset categorization.
                       </p>
                     </div>
 

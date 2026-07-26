@@ -30,6 +30,7 @@ export interface Share {
 interface PortfolioState {
   shares: Share[]
   currency: string
+  originMarket: string
   triggeredAlerts: string[]
   isLoading: boolean
   isAuthLoading: boolean
@@ -47,8 +48,21 @@ interface PortfolioState {
   signOut: () => Promise<void>
   setError: (error: string | null) => void
   setLoading: (loading: boolean) => void
+  setOriginMarket: (market: string) => void
   setCurrency: (currency: string) => void
   dismissAlert: (index: number) => void
+}
+
+export const CURRENCY_TO_MARKET: Record<string, string> = {
+  MYR: "MY",
+  SGD: "SG",
+  USD: "US",
+  HKD: "HK",
+  AUD: "AU",
+  CAD: "CA",
+  GBP: "UK",
+  EUR: "EU",
+  JPY: "JP",
 }
 
 export const usePortfolioStore = create<PortfolioState>()(
@@ -56,6 +70,7 @@ export const usePortfolioStore = create<PortfolioState>()(
     (set, get) => ({
       shares: [],
       currency: "USD",
+      originMarket: "US",
       triggeredAlerts: [],
       isLoading: false,
       isAuthLoading: true,
@@ -63,7 +78,8 @@ export const usePortfolioStore = create<PortfolioState>()(
       error: null,
       setError: (error) => set({ error }),
       setLoading: (loading) => set({ isLoading: loading }),
-      setCurrency: (currency) => set({ currency }),
+      setOriginMarket: (originMarket) => set({ originMarket }),
+      setCurrency: (currency) => set({ currency, originMarket: CURRENCY_TO_MARKET[currency] || "US" }),
       dismissAlert: (index) => {
         set((state) => ({
           triggeredAlerts: state.triggeredAlerts.filter((_, idx) => idx !== index),
@@ -435,6 +451,7 @@ export const usePortfolioStore = create<PortfolioState>()(
       name: "yieldwatch-portfolio-settings",
       partialize: (state) => ({
         currency: state.currency,
+        originMarket: state.originMarket || "US",
         triggeredAlerts: state.triggeredAlerts,
       }), // Persist client configuration settings, exclude database-managed shares list
     }
