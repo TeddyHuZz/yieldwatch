@@ -246,12 +246,12 @@ export default function InsightsPage() {
       <div className="flex flex-col flex-1 items-center justify-center bg-background text-foreground p-8 min-h-screen">
         <div className="w-full max-w-6xl animate-pulse space-y-6">
           <div className="h-8 bg-muted w-1/4 rounded" />
-          <div className="h-[60px] bg-muted rounded-xl" />
+          <div className="h-15 bg-muted rounded-xl" />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="h-[106px] bg-muted rounded-xl" />
-            <div className="h-[106px] bg-muted rounded-xl" />
-            <div className="h-[106px] bg-muted rounded-xl" />
-            <div className="h-[106px] bg-muted rounded-xl" />
+            <div className="h-26.5 bg-muted rounded-xl" />
+            <div className="h-26.5 bg-muted rounded-xl" />
+            <div className="h-26.5 bg-muted rounded-xl" />
+            <div className="h-26.5 bg-muted rounded-xl" />
           </div>
         </div>
       </div>
@@ -365,7 +365,7 @@ export default function InsightsPage() {
       return (
         <div
           key={item.ticker}
-          className="p-4 rounded-xl border border-border/40 bg-card/45 animate-pulse h-[106px] flex flex-col justify-between"
+          className="p-4 rounded-xl border border-border/40 bg-card/45 animate-pulse h-26.5 flex flex-col justify-between"
         >
           <div className="flex items-center justify-between w-full">
             <div className="w-12 h-5 bg-muted rounded" />
@@ -389,7 +389,7 @@ export default function InsightsPage() {
       <button
         key={item.ticker}
         onClick={() => setActiveTicker(item.ticker)}
-        className={`text-left p-4 rounded-xl border bg-card transition-all duration-300 hover:border-border cursor-pointer flex flex-col justify-between h-[106px] ${
+        className={`text-left p-4 rounded-xl border bg-card transition-all duration-300 hover:border-border cursor-pointer flex flex-col justify-between h-26.5 ${
           isSelected
             ? "border-emerald-500 shadow-sm ring-1 ring-emerald-500/25 bg-emerald-500/5"
             : "border-border/70"
@@ -583,7 +583,7 @@ export default function InsightsPage() {
                         </span>
                         <span className="text-[8px] font-mono">{pickMarket.flag}</span>
                       </div>
-                      <span className="text-[9px] text-muted-foreground font-bold truncate max-w-[120px]">
+                      <span className="text-[9px] text-muted-foreground font-bold truncate max-w-30">
                         {pick.companyName}
                       </span>
                     </div>
@@ -730,7 +730,7 @@ export default function InsightsPage() {
 
             {/* Drill-down Detail Panel */}
             {detailLoading ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-card/20 border border-dashed border-border/60 rounded-2xl min-h-[300px]">
+              <div className="flex flex-col items-center justify-center py-20 bg-card/20 border border-dashed border-border/60 rounded-2xl min-h-75">
                 <ArrowClockwise className="w-6 h-6 text-emerald-500 animate-spin mb-3" />
                 <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Resolving data models...</p>
               </div>
@@ -739,7 +739,7 @@ export default function InsightsPage() {
                 
                 {/* Check if active selection is in skeletal loading state */}
                 {activeAnalysis.isLoading ? (
-                  <div className="w-full h-[400px] bg-card/20 border border-dashed border-border/60 rounded-2xl animate-pulse flex flex-col items-center justify-center">
+                  <div className="w-full h-100 bg-card/20 border border-dashed border-border/60 rounded-2xl animate-pulse flex flex-col items-center justify-center">
                     <ArrowClockwise className="w-6 h-6 text-emerald-500/80 animate-spin mb-2" />
                     <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest">Fetching metric details...</p>
                   </div>

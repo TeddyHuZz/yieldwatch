@@ -248,7 +248,7 @@ export default function NewsPage() {
                 ))}
               </div>
             ) : marketNews.length === 0 ? (
-              <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-[300px]">
+              <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-75">
                 <Globe className="w-8 h-8 text-muted-foreground/60 mb-3 animate-pulse" />
                 <p className="text-xs text-muted-foreground uppercase font-mono tracking-wider">No market news feeds loaded.</p>
               </div>
@@ -293,7 +293,7 @@ export default function NewsPage() {
         {activeTab === "portfolio" && (
           <div className="space-y-6">
             {shares.length === 0 ? (
-              <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-[300px]">
+              <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-75">
                 <CalendarBlank className="w-8 h-8 text-muted-foreground/60 mb-3" />
                 <h4 className="text-xs font-bold text-foreground uppercase mb-1">Portfolio empty</h4>
                 <p className="text-[10px] text-muted-foreground max-w-xs leading-relaxed">
@@ -337,7 +337,7 @@ export default function NewsPage() {
                     ))}
                   </div>
                 ) : filteredPortfolioNews.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-[250px]">
+                  <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-62.5">
                     <Newspaper className="w-8 h-8 text-muted-foreground/60 mb-3" />
                     <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
                       {selectedTicker === "ALL"

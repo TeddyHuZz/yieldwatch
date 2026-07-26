@@ -174,9 +174,9 @@ export default function ProfilePage() {
         <div className="w-full max-w-6xl animate-pulse space-y-6">
           <div className="h-8 bg-muted w-1/4 rounded" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="h-[250px] bg-muted rounded-xl" />
-            <div className="h-[250px] bg-muted rounded-xl" />
-            <div className="h-[250px] bg-muted rounded-xl" />
+            <div className="h-62.5 bg-muted rounded-xl" />
+            <div className="h-62.5 bg-muted rounded-xl" />
+            <div className="h-62.5 bg-muted rounded-xl" />
           </div>
         </div>
       </div>
@@ -360,7 +360,7 @@ export default function ProfilePage() {
                         Global Reporting Currency
                       </label>
                       <div className="flex items-center gap-3">
-                        <div className="relative w-full max-w-[220px]">
+                        <div className="relative w-full max-w-55">
                           <select
                             value={currency}
                             onChange={handleCurrencyChange}
@@ -499,7 +499,7 @@ export default function ProfilePage() {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[250px] overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-62.5 overflow-y-auto pr-1">
                       {sharesWithAlerts.map((share) => (
                         <div
                           key={share.id}
@@ -509,7 +509,7 @@ export default function ProfilePage() {
                             <span className="font-bold text-foreground bg-muted/80 px-2 py-0.5 rounded w-fit border border-border/40 text-[9px]">
                               {share.ticker}
                             </span>
-                            <span className="text-[8px] text-muted-foreground truncate max-w-[140px] block">
+                            <span className="text-[8px] text-muted-foreground truncate max-w-35 block">
                               {share.companyName}
                             </span>
                           </div>
@@ -657,7 +657,7 @@ export default function ProfilePage() {
                         <p className="text-[10px] font-mono leading-relaxed">No payout history logged yet.</p>
                       </div>
                     ) : (
-                      <div className="overflow-y-auto max-h-[290px] pr-1">
+                      <div className="overflow-y-auto max-h-72.5 pr-1">
                         <table className="w-full text-left border-collapse text-[10px] font-mono">
                           <thead>
                             <tr className="border-b border-border/60 text-muted-foreground font-sans uppercase font-bold text-[8px] tracking-wider">

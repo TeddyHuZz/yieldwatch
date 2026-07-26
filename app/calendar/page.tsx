@@ -111,9 +111,9 @@ export default function CalendarPage() {
         <div className="w-full max-w-6xl animate-pulse space-y-6">
           <div className="h-8 bg-muted w-1/4 rounded" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="h-[300px] bg-muted rounded-xl" />
-            <div className="h-[300px] bg-muted rounded-xl" />
-            <div className="h-[300px] bg-muted rounded-xl" />
+            <div className="h-75 bg-muted rounded-xl" />
+            <div className="h-75 bg-muted rounded-xl" />
+            <div className="h-75 bg-muted rounded-xl" />
           </div>
         </div>
       </div>
@@ -221,7 +221,7 @@ export default function CalendarPage() {
 
         {shares.length === 0 ? (
           /* Empty state */
-          <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-[350px]">
+          <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-87.5">
             <div className="w-12 h-12 rounded-full bg-muted/30 flex items-center justify-center mb-4">
               <Calendar className="w-6 h-6 text-muted-foreground/60" />
             </div>
@@ -259,7 +259,7 @@ export default function CalendarPage() {
                     <button
                       key={monthName}
                       onClick={() => setSelectedMonth(idx)}
-                      className={`text-left p-4 rounded-xl border bg-card/60 hover:bg-card/90 transition-all duration-200 cursor-pointer flex flex-col justify-between h-[116px] relative group overflow-hidden ${
+                      className={`text-left p-4 rounded-xl border bg-card/60 hover:bg-card/90 transition-all duration-200 cursor-pointer flex flex-col justify-between h-29 relative group overflow-hidden ${
                         isSelected
                           ? "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-500/5"
                           : isCurrentMonth
@@ -317,7 +317,7 @@ export default function CalendarPage() {
                     <p className="text-[10px] font-mono leading-relaxed">No dividend payments expected in {MONTHS[activeMonthIndex]}.</p>
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-55 overflow-y-auto pr-1">
                     {activeMonthHoldings.map((share) => {
                       const eventPayout = getPayoutAmount(share)
                       return (
@@ -329,7 +329,7 @@ export default function CalendarPage() {
                             <span className="font-bold text-foreground bg-muted border border-border/50 px-1.5 py-0.5 rounded w-fit text-[9px]">
                               {share.ticker}
                             </span>
-                            <span className="text-[8px] text-muted-foreground truncate max-w-[150px] sm:max-w-xs block font-sans">
+                            <span className="text-[8px] text-muted-foreground truncate max-w-37.5 sm:max-w-xs block font-sans">
                               {share.companyName}
                             </span>
                           </div>
@@ -369,7 +369,7 @@ export default function CalendarPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-125 overflow-y-auto pr-1">
                   {upcomingExDates.map((item) => {
                     const isOverdue = item.diffDays < 0
                     const isToday = item.diffDays === 0

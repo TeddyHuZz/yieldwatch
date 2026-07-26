@@ -190,8 +190,8 @@ export default function Home() {
             <div className="h-24 bg-muted rounded" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="h-[250px] bg-muted rounded" />
-            <div className="h-[250px] bg-muted rounded" />
+            <div className="h-62.5 bg-muted rounded" />
+            <div className="h-62.5 bg-muted rounded" />
           </div>
           <div className="h-64 bg-muted rounded" />
         </div>
@@ -334,7 +334,7 @@ export default function Home() {
 
         {shares.length === 0 ? (
           /* Empty State */
-          <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-[400px]">
+          <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-100">
             <div className="w-12 h-12 rounded-full bg-muted/30 flex items-center justify-center mb-4">
               <CalendarBlank className="w-6 h-6 text-muted-foreground/60" />
             </div>
@@ -436,7 +436,7 @@ export default function Home() {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-muted-foreground font-sans">YOC:</span>
-                    <span className="font-bold text-emerald-500 bg-emerald-500/10 px-1 py-0.25 rounded">
+                    <span className="font-bold text-emerald-500 bg-emerald-500/10 px-1 py-px rounded">
                       {formatPercent(yieldOnCost)}
                     </span>
                   </div>
@@ -576,7 +576,7 @@ export default function Home() {
                             }`}
                           >
                             {/* Symbol & Name */}
-                            <td className="p-4 pl-5 max-w-[150px] sm:max-w-none font-sans">
+                            <td className="p-4 pl-5 max-w-37.5 sm:max-w-none font-sans">
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono font-bold text-foreground bg-muted/65 dark:bg-muted/30 border border-border/30 px-1.5 py-0.5 rounded w-fit tracking-wide text-xs">
@@ -588,7 +588,7 @@ export default function Home() {
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-[10px] text-muted-foreground truncate max-w-[140px] sm:max-w-xs">
+                                <span className="text-[10px] text-muted-foreground truncate max-w-35 sm:max-w-xs">
                                   {share.companyName}
                                 </span>
                                 {share.exDividendDate && (
@@ -664,7 +664,7 @@ export default function Home() {
                               <div className="text-muted-foreground">
                                 {formatPercent(share.dividendYield)}
                               </div>
-                              <div className="text-emerald-500 font-bold bg-emerald-500/10 dark:bg-emerald-500/15 px-1 py-0.25 rounded w-fit ml-auto">
+                              <div className="text-emerald-500 font-bold bg-emerald-500/10 dark:bg-emerald-500/15 px-1 py-px rounded w-fit ml-auto">
                                 {formatPercent(shareYieldOnCost)}
                               </div>
                             </td>

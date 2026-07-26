@@ -40,9 +40,9 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
 
   if (!isMounted) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full min-h-[350px]">
-        <div className="h-[350px] bg-card border border-border/70 animate-pulse rounded-xl" />
-        <div className="h-[350px] bg-card border border-border/70 animate-pulse rounded-xl" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full min-h-87.5">
+        <div className="h-87.5 bg-card border border-border/70 animate-pulse rounded-xl" />
+        <div className="h-87.5 bg-card border border-border/70 animate-pulse rounded-xl" />
       </div>
     )
   }
@@ -121,9 +121,9 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
           </p>
         </div>
 
-        <div className="flex-1 min-h-[250px] flex items-center justify-center">
+        <div className="flex-1 min-h-62.5 flex items-center justify-center">
           {hasHoldings ? (
-            <div className="relative w-full h-[250px] flex items-center justify-center">
+            <div className="relative w-full h-62.5 flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -183,7 +183,7 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
         </div>
 
         {hasHoldings && (
-          <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1.5 max-h-[80px] overflow-y-auto pt-2 border-t border-border/30">
+          <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1.5 max-h-20 overflow-y-auto pt-2 border-t border-border/30">
             {allocationData.slice(0, 8).map((data, index) => {
               const percent = ((data.value / totalValue) * 100).toFixed(1)
               return (
@@ -217,7 +217,7 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
           </p>
         </div>
 
-        <div className="flex-1 min-h-[250px] flex items-center justify-center">
+        <div className="flex-1 min-h-62.5 flex items-center justify-center">
           {hasDividends ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart

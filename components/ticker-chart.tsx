@@ -146,7 +146,7 @@ export function TickerChart({ symbol, currency }: TickerChartProps) {
       </div>
 
       {/* Chart Canvas */}
-      <div className="h-[180px] w-full flex items-center justify-center relative font-mono text-[9px]">
+      <div className="h-45 w-full flex items-center justify-center relative font-mono text-[9px]">
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-card/20 z-10 backdrop-blur-xs">
             <span className="text-xs text-muted-foreground animate-pulse">Loading chart data...</span>

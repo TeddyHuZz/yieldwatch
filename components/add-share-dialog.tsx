@@ -331,7 +331,7 @@ export function AddShareDialog({ isOpen, onOpenChange, editShareId }: AddShareDi
 
               {/* Suggestions dropdown */}
               {suggestions.length > 0 && (
-                <div className="absolute z-50 top-full left-0 right-0 bg-popover border border-border rounded-md mt-1 max-h-[160px] overflow-y-auto shadow-lg">
+                <div className="absolute z-50 top-full left-0 right-0 bg-popover border border-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
                   {suggestions.map((item) => (
                     <div
                       key={item.symbol}
@@ -339,7 +339,7 @@ export function AddShareDialog({ isOpen, onOpenChange, editShareId }: AddShareDi
                       className="px-3 py-2 hover:bg-muted cursor-pointer flex justify-between items-center text-[10px] border-b border-border/40 last:border-0 font-mono"
                     >
                       <span className="font-semibold text-foreground">{item.symbol}</span>
-                      <span className="text-muted-foreground text-[9px] truncate max-w-[200px]">
+                      <span className="text-muted-foreground text-[9px] truncate max-w-50">
                         {item.name} ({item.exchange})
                       </span>
                     </div>
