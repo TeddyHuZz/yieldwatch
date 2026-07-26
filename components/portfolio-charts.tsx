@@ -143,12 +143,13 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
                     ))}
                   </Pie>
                   <Tooltip
+                    wrapperStyle={{ zIndex: 1000 }}
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         const data = payload[0].payload
                         const percent = ((data.value / totalValue) * 100).toFixed(1)
                         return (
-                          <div className="bg-popover/90 backdrop-blur-md border border-border/80 px-3 py-2 text-xs rounded-md shadow-md text-popover-foreground font-mono">
+                          <div className="bg-popover border border-border/80 px-3 py-2 text-xs rounded-md shadow-xl text-popover-foreground font-mono">
                             <p className="font-semibold text-foreground font-sans">{data.name}</p>
                             <p className="text-muted-foreground mt-0.5">
                               Value: {formatCurrency(data.value)}
@@ -166,7 +167,7 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
               </ResponsiveContainer>
 
               {/* Center overlay for donut chart */}
-              <div className="absolute flex flex-col items-center justify-center text-center">
+              <div className="absolute flex flex-col items-center justify-center text-center pointer-events-none z-0">
                 <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-sans font-bold">
                   Holdings Value
                 </span>
@@ -222,7 +223,7 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={monthlyDividends}
-                margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
+                margin={{ top: 10, right: 10, left: 15, bottom: 0 }}
               >
                 <defs>
                   <linearGradient id="emeraldBarGrad" x1="0" y1="0" x2="0" y2="1">
@@ -240,6 +241,7 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
                   stroke="var(--color-muted-foreground)"
                 />
                 <YAxis
+                  width={65}
                   tickLine={false}
                   axisLine={false}
                   fontSize={10}
@@ -254,12 +256,13 @@ export function PortfolioCharts({ shares, currency }: PortfolioChartsProps) {
                   }
                 />
                 <Tooltip
+                  wrapperStyle={{ zIndex: 1000 }}
                   cursor={{ fill: "var(--color-muted)", opacity: 0.12 }}
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       const data = payload[0].payload
                       return (
-                        <div className="bg-popover/90 backdrop-blur-md border border-border/80 px-3 py-2 text-xs rounded-md shadow-md text-popover-foreground font-mono">
+                        <div className="bg-popover border border-border/80 px-3 py-2 text-xs rounded-md shadow-xl text-popover-foreground font-mono">
                           <p className="font-semibold text-foreground font-sans">{data.name}</p>
                           <p className="text-emerald-500 font-bold mt-0.5">
                             Payout: {formatCurrency(data.amount)}

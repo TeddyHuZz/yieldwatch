@@ -163,7 +163,7 @@ export function TickerChart({ symbol, currency }: TickerChartProps) {
 
         {data.length > 0 && (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
+            <AreaChart data={data} margin={{ top: 10, right: 5, left: 10, bottom: 0 }}>
               <defs>
                 <linearGradient id={`gradient-${symbol}-${range}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={stopColor} stopOpacity={0.35} />
@@ -181,6 +181,7 @@ export function TickerChart({ symbol, currency }: TickerChartProps) {
                 opacity={0.8}
               />
               <YAxis
+                width={55}
                 tickLine={false}
                 axisLine={false}
                 fontSize={9}
@@ -190,12 +191,13 @@ export function TickerChart({ symbol, currency }: TickerChartProps) {
                 opacity={0.8}
               />
               <Tooltip
+                wrapperStyle={{ zIndex: 1000 }}
                 cursor={{ stroke: strokeColor, strokeWidth: 1, strokeDasharray: "3 3", opacity: 0.5 }}
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const priceItem = payload[0].payload
                     return (
-                      <div className="bg-popover/90 backdrop-blur-md border border-border/80 px-2.5 py-1.5 text-[10px] rounded-md shadow-md text-popover-foreground">
+                      <div className="bg-popover border border-border/80 px-2.5 py-1.5 text-[10px] rounded-md shadow-xl text-popover-foreground">
                         <p className="text-muted-foreground font-sans uppercase font-bold text-[8px] tracking-wider">
                           {formatDateLabel(priceItem.date)}
                         </p>
