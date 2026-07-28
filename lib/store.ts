@@ -195,6 +195,11 @@ export const usePortfolioStore = create<PortfolioState>()(
           }))
 
           set({ shares, isLoading: false })
+
+          // Automatically trigger live price & dividend sync on login/mount
+          if (shares.length > 0) {
+            get().refreshSharePrices()
+          }
         } catch (err: any) {
           console.error("Database load error:", err)
           set({ error: err.message || "Failed to load shares", isLoading: false })

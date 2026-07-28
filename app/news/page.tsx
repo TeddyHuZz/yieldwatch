@@ -35,6 +35,7 @@ export default function NewsPage() {
 
   const {
     shares,
+    isLoading,
     isAuthLoading,
     user,
     checkUserSession,
@@ -292,7 +293,13 @@ export default function NewsPage() {
         {/* Tab 2: Company Portfolio News */}
         {activeTab === "portfolio" && (
           <div className="space-y-6">
-            {shares.length === 0 ? (
+            {isLoading || isAuthLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-32 bg-muted/30 border border-border/50 rounded-xl" />
+                ))}
+              </div>
+            ) : shares.length === 0 ? (
               <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-75">
                 <CalendarBlank className="w-8 h-8 text-muted-foreground/60 mb-3" />
                 <h4 className="text-xs font-bold text-foreground uppercase mb-1">Portfolio empty</h4>

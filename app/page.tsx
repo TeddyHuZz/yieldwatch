@@ -332,7 +332,54 @@ export default function Home() {
           </div>
         )}
 
-        {shares.length === 0 ? (
+        {isLoading || isAuthLoading ? (
+          /* Portfolio Loading Skeleton */
+          <div className="space-y-6 animate-pulse select-none">
+            {/* KPI Grid Skeleton */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-card/80 border border-border/70 p-4 rounded-xl h-28 flex flex-col justify-between">
+                  <div className="flex justify-between items-center">
+                    <div className="h-2.5 bg-muted/60 w-24 rounded" />
+                    <div className="w-5 h-5 bg-muted/40 rounded-md" />
+                  </div>
+                  <div className="h-6 bg-muted/80 w-32 rounded mt-2" />
+                  <div className="h-2 bg-muted/50 w-20 rounded mt-2" />
+                </div>
+              ))}
+            </div>
+
+            {/* Charts Skeleton */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+              <div className="h-87.5 bg-card/80 border border-border/70 rounded-xl p-6 flex flex-col justify-between">
+                <div className="h-4 bg-muted/60 w-36 rounded" />
+                <div className="h-56 bg-muted/30 rounded-xl flex items-center justify-center">
+                  <div className="w-32 h-32 rounded-full border-4 border-muted/50 border-t-emerald-500 animate-spin" />
+                </div>
+                <div className="h-3 bg-muted/40 w-48 mx-auto rounded" />
+              </div>
+              <div className="h-87.5 bg-card/80 border border-border/70 rounded-xl p-6 flex flex-col justify-between">
+                <div className="h-4 bg-muted/60 w-36 rounded" />
+                <div className="h-56 bg-muted/30 rounded-xl flex items-end justify-between p-4 gap-2">
+                  {[40, 70, 30, 90, 50, 80, 60, 45, 75, 85, 35, 65].map((h, idx) => (
+                    <div key={idx} className="w-full bg-muted/50 rounded-t" style={{ height: `${h}%` }} />
+                  ))}
+                </div>
+                <div className="h-3 bg-muted/40 w-48 mx-auto rounded" />
+              </div>
+            </div>
+
+            {/* Holdings Table Skeleton */}
+            <div className="space-y-3">
+              <div className="h-4 bg-muted/60 w-32 rounded" />
+              <div className="border border-border/70 rounded-xl bg-card/80 p-4 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-12 bg-muted/30 rounded-lg" />
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : shares.length === 0 ? (
           /* Empty State */
           <div className="flex flex-col items-center justify-center border border-dashed border-border/80 p-16 text-center bg-card/15 rounded-xl min-h-100">
             <div className="w-12 h-12 rounded-full bg-muted/30 flex items-center justify-center mb-4">
