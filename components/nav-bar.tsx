@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Sun, Moon, ChartBar, Newspaper, User, ChartLineUp, CalendarBlank } from "@phosphor-icons/react"
+import { Sun, Moon, ChartBar, Newspaper, User, ChartLineUp, CalendarBlank, FileText } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { usePortfolioStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -115,6 +115,18 @@ export function NavBar() {
             >
               <ChartLineUp className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Insights</span>
+            </Link>
+            <Link
+              href="/reports"
+              className={cn(
+                "px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
+                pathname === "/reports"
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              )}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Reports</span>
             </Link>
             <Link
               href="/calendar"
